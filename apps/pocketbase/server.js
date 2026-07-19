@@ -72,6 +72,7 @@ function startPocketBase() {
       '--migrationsDir=./pb_migrations',
       '--hooksDir=./pb_hooks',
       '--hooksWatch=false',
+      '--hooksPool=1',
     ],
     { cwd: __dirname, stdio: 'inherit' }
   );
