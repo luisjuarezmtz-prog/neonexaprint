@@ -217,7 +217,7 @@ export default function HalftoneSmartTool() {
   };
 
   // Full regeneration: anything that changes the actual dot pattern.
-  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, removeLight, threshold]);
+  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, removeLight, threshold]);
   // Cheap redraw only: these affect compositing, not the generated dots/base.
   useEffect(() => { if (ready) renderView(); /* eslint-disable-next-line */ }, [view, garmentColor, underbase, baseOpacity]);
 
@@ -233,7 +233,6 @@ export default function HalftoneSmartTool() {
       thumbImgRef.current = img;
       setFileName(file.name);
       setReady(true);
-      regenerate();
     } catch (e) { setErr(String(e.message || e)); }
   };
 
