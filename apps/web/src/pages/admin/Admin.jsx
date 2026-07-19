@@ -12,9 +12,17 @@ import { TOOLS } from '@/lib/tools';
 const STATUSES = Object.keys(STATUS_META);
 const PAYS = ['pendiente', 'pagado', 'fallido', 'reembolsado'];
 
+const TABS_BY_ROLE = {
+  admin: ['resumen', 'pedidos', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'clientes'],
+  ventas: ['resumen', 'pedidos', 'clientes'],
+  operador: ['pedidos'],
+};
+
 export default function Admin() {
-  const { isAuthed, isAdmin } = useAuth();
-  const [tab, setTab] = useState('resumen');
+  const { isAuthed, isStaff, user } = useAuth();
+  const role = user?.role;
+  const allowedTabs = TABS_BY_ROLE[role] || [];
+  const [tab, setTab] = useState(null);
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,12 +33,13 @@ export default function Admin() {
       pb.collection('users').getFullList({ sort: '-created' }).catch(() => []),
     ]).then(([o, u]) => { setOrders(o); setUsers(u); }).finally(() => setLoading(false));
   };
-  useEffect(() => { if (isAuthed && isAdmin) load(); }, [isAuthed, isAdmin]);
+  useEffect(() => { if (isAuthed && isStaff) load(); }, [isAuthed, isStaff]);
+  useEffect(() => { if (!tab && allowedTabs.length) setTab(allowedTabs[0]); }, [allowedTabs, tab]);
 
   if (!isAuthed) return <Navigate to="/login" replace />;
-  if (!isAdmin) return <Navigate to="/dashboard" replace />;
+  if (!isStaff) return <Navigate to="/dashboard" replace />;
 
-  const tabs = [
+  const allTabs = [
     { id: 'resumen', label: 'Resumen', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos', icon: Package },
     { id: 'productos', label: 'Productos', icon: ShoppingBag },
@@ -40,6 +49,7 @@ export default function Admin() {
     { id: 'tools', label: 'Tools / Límites', icon: Wrench },
     { id: 'clientes', label: 'Clientes', icon: Users },
   ];
+  const tabs = allTabs.filter(t => allowedTabs.includes(t.id));
 
   return (
     <PageShell>

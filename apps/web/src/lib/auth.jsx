@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
     user,
     isAuthed: pb.authStore.isValid,
     isAdmin: user?.role === 'admin',
+    isStaff: ['admin', 'operador', 'ventas'].includes(user?.role),
     login: (email, password) => pb.collection('users').authWithPassword(email, password),
     signup: async (fields) => {
       const { email, password, name, phone = '', company = '', rfc = '' } = fields;
