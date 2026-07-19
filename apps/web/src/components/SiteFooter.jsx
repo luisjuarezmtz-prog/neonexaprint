@@ -38,7 +38,7 @@ export default function SiteFooter() {
             <div className="font-display tracking-[0.22em] text-xs text-[#00AEEF] mb-3">CONTACTO</div>
             <ul className="space-y-2 text-white/70">
               <li><a href="mailto:contacto@neonexaprint.com.mx" className="hover:text-[#00F0FF]">contacto@neonexaprint.com.mx</a></li>
-              <li><a href="https://wa.me/5611050049" target="_blank" rel="noopener noreferrer" className="hover:text-[#00F0FF]">+56 1105 0049</a></li>
+              <li><a href={`https://wa.me/5611050049?text=${encodeURIComponent('Hola Neonexa Print, necesito información sobre sus productos y servicios para contratar su membresía.')}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#00F0FF]">+56 1105 0049</a></li>
               <li>CDMX · Área Metropolitana</li>
             </ul>
           </div>
