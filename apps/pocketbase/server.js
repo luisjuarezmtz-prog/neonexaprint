@@ -19,6 +19,13 @@ try {
   console.error('could not chmod pocketbase binary:', err.message);
 }
 
+console.log('env check:', JSON.stringify({
+  PORT: process.env.PORT || '(unset)',
+  PB_ENCRYPTION_KEY: process.env.PB_ENCRYPTION_KEY ? 'set' : '(unset)',
+  PB_SUPERUSER_EMAIL: process.env.PB_SUPERUSER_EMAIL ? 'set' : '(unset)',
+  PB_SUPERUSER_PASSWORD: process.env.PB_SUPERUSER_PASSWORD ? 'set' : '(unset)',
+}));
+
 function startPocketBase() {
   const pb = spawn(
     PB_BINARY,
