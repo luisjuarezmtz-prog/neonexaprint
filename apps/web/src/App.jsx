@@ -38,7 +38,14 @@ import Admin from './pages/admin/Admin';
 import WhatsAppButton from './components/WhatsAppButton';
 import { Toaster } from 'sonner';
 
+const APEX_HOSTS = ['neonexaprint.com.mx', 'www.neonexaprint.com.mx'];
+
 function App() {
+  if (typeof window !== 'undefined' && APEX_HOSTS.includes(window.location.hostname)) {
+    window.location.replace(`https://app.neonexaprint.com.mx${window.location.pathname}${window.location.search}${window.location.hash}`);
+    return null;
+  }
+
   return (
     <AuthProvider>
       <MembershipProvider>
