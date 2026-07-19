@@ -1,8 +1,4 @@
 node_modules/
-# Cloud Startup's Node.js App install step doesn't persist into the running
-# app dir, so the backend vendors its (tiny) node_modules directly in git.
-!apps/pocketbase/node_modules/
-!apps/pocketbase/node_modules/**
 dist/
 .env
 .env.*

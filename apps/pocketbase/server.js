@@ -3,7 +3,6 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import httpProxy from 'http-proxy';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PB_BINARY = path.join(__dirname, 'pocketbase');
@@ -47,17 +46,31 @@ function startPocketBase() {
 
 startPocketBase();
 
-const proxy = httpProxy.createProxyServer({
-  target: `http://${PB_HOST}:${PB_PORT}`,
-});
+// Plain Node http proxy — no external dependency, since this host's deploy
+// step strips node_modules regardless of what's committed to git.
+const server = http.createServer((clientReq, clientRes) => {
+  const proxyReq = http.request(
+    {
+      host: PB_HOST,
+      port: PB_PORT,
+      path: clientReq.url,
+      method: clientReq.method,
+      headers: clientReq.headers,
+    },
+    (proxyRes) => {
+      clientRes.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(clientRes);
+    }
+  );
 
-proxy.on('error', (err, req, res) => {
-  console.error('proxy error:', err.message);
-  if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain' });
-  res.end('Backend starting up, try again in a moment.');
-});
+  proxyReq.on('error', (err) => {
+    console.error('proxy error:', err.message);
+    if (!clientRes.headersSent) clientRes.writeHead(502, { 'Content-Type': 'text/plain' });
+    clientRes.end('Backend starting up, try again in a moment.');
+  });
 
-const server = http.createServer((req, res) => proxy.web(req, res));
+  clientReq.pipe(proxyReq);
+});
 
 server.listen(PUBLIC_PORT, () => {
   console.log(`Proxy listening on ${PUBLIC_PORT}, forwarding to pocketbase on ${PB_HOST}:${PB_PORT}`);
