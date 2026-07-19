@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useMembership, isMembershipActive } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
-import { Package, FileImage, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download } from 'lucide-react';
+import { Package, FileImage, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star } from 'lucide-react';
 import { toolBySlug } from '@/lib/tools';
 
 export const STATUS_META = {
@@ -108,7 +108,12 @@ export default function Dashboard() {
             {tab === 'packs' && <MisPacks purchases={packPurchases}/>}
             {tab === 'trabajos' && <ToolJobs jobs={toolJobs}/>}
             {tab === 'archivos' && <Files files={files}/>}
-            {tab === 'datos' && <Datos user={user} updateProfile={updateProfile}/>}
+            {tab === 'datos' && (
+              <div className="space-y-6">
+                <Datos user={user} updateProfile={updateProfile}/>
+                <Addresses/>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -319,6 +324,78 @@ function Files({ files }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+export function Addresses({ selectable, selectedId, onSelect }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const blank = { label: '', street: '', city: '', state: '', zip: '', phone: '', is_default: false };
+
+  const load = () => pb.collection('addresses').getFullList({ sort: '-is_default,-created' }).then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
+  useEffect(load, []);
+
+  const save = async () => {
+    const data = { ...editing, owner: pb.authStore.record.id };
+    try {
+      if (data.id) await pb.collection('addresses').update(data.id, data);
+      else await pb.collection('addresses').create(data);
+      setEditing(null); load();
+    } catch (e) { alert(e?.message || 'No se pudo guardar la dirección.'); }
+  };
+  const del = async (id) => { if (!confirm('¿Eliminar esta dirección?')) return; try { await pb.collection('addresses').delete(id); load(); } catch { /* ignore */ } };
+  const makeDefault = async (a) => {
+    try {
+      await Promise.all(items.filter(x => x.is_default && x.id !== a.id).map(x => pb.collection('addresses').update(x.id, { is_default: false })));
+      await pb.collection('addresses').update(a.id, { is_default: true });
+      load();
+    } catch { /* ignore */ }
+  };
+
+  const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
+
+  if (loading) return <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]" size={24}/></div>;
+
+  return (
+    <div className="nx-card p-6 max-w-2xl">
+      <div className="flex items-center justify-between mb-4">
+        <div className="font-display uppercase tracking-widest text-sm text-[#00F0FF] flex items-center gap-2"><MapPin size={16}/>Mis direcciones</div>
+        <button onClick={() => setEditing(blank)} className="nx-btn-ghost px-4 py-2 text-xs inline-flex items-center gap-1"><Plus size={14}/>Nueva</button>
+      </div>
+
+      {editing && (
+        <div className="border border-[#00AEEF]/20 rounded p-4 mb-4 grid sm:grid-cols-2 gap-3">
+          <label className="text-xs sm:col-span-2"><span className="uppercase tracking-widest text-white/50 block mb-1">Etiqueta</span><input className={inp} placeholder="Casa, oficina…" value={editing.label} onChange={e => setEditing(x => ({ ...x, label: e.target.value }))}/></label>
+          <label className="text-xs sm:col-span-2"><span className="uppercase tracking-widest text-white/50 block mb-1">Calle y número</span><input className={inp} value={editing.street} onChange={e => setEditing(x => ({ ...x, street: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Ciudad</span><input className={inp} value={editing.city} onChange={e => setEditing(x => ({ ...x, city: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Estado</span><input className={inp} value={editing.state} onChange={e => setEditing(x => ({ ...x, state: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">C.P.</span><input className={inp} value={editing.zip} onChange={e => setEditing(x => ({ ...x, zip: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Teléfono</span><input className={inp} value={editing.phone} onChange={e => setEditing(x => ({ ...x, phone: e.target.value }))}/></label>
+          <div className="sm:col-span-2 flex gap-3"><button onClick={save} className="nx-btn-primary px-5 py-2 text-sm">Guardar</button><button onClick={() => setEditing(null)} className="nx-btn-ghost px-5 py-2 text-sm">Cancelar</button></div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {items.map(a => (
+          <div key={a.id} className={`p-3 rounded border flex items-center gap-3 ${selectable && selectedId === a.id ? 'border-[#00F0FF] bg-[#00AEEF]/10' : 'border-white/10'}`}>
+            {selectable && <input type="radio" checked={selectedId === a.id} onChange={() => onSelect(a)} className="accent-[#00F0FF]"/>}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm flex items-center gap-2">{a.label} {a.is_default && <span className="text-[10px] text-[#FFD400] uppercase tracking-widest">Predeterminada</span>}</div>
+              <div className="text-xs text-white/50 truncate">{a.street}, {a.city}, {a.state} {a.zip}</div>
+            </div>
+            {!selectable && (
+              <div className="flex items-center gap-2 shrink-0">
+                {!a.is_default && <button onClick={() => makeDefault(a)} className="text-white/40 hover:text-[#FFD400]" title="Hacer predeterminada"><Star size={15}/></button>}
+                <button onClick={() => setEditing(a)} className="nx-btn-ghost px-2 py-1 text-xs">Editar</button>
+                <button onClick={() => del(a.id)} className="text-[#FF2D95]"><Trash2 size={15}/></button>
+              </div>
+            )}
+          </div>
+        ))}
+        {items.length === 0 && <div className="text-white/40 text-sm py-4 text-center">Sin direcciones guardadas.</div>}
+      </div>
     </div>
   );
 }

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import PageShell from '@/components/PageShell';
 import { useCart } from '@/lib/cart';
 import { useAuth } from '@/lib/auth';
 import pb from '@/lib/pocketbaseClient';
 import { money, makeFolio } from '@/lib/neonexa';
+import { Addresses } from '@/pages/Dashboard';
 import { Loader2, CreditCard } from 'lucide-react';
 
 const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
@@ -22,7 +23,23 @@ export default function Checkout() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [payMode, setPayMode] = useState('total');
+  const [selectedAddr, setSelectedAddr] = useState(null);
+  const [saveAddr, setSaveAddr] = useState(false);
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    pb.collection('addresses').getFullList({ sort: '-is_default,-created' }).then(list => {
+      const def = list.find(a => a.is_default) || list[0];
+      if (def) selectAddr(def);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed]);
+
+  const selectAddr = (a) => {
+    setSelectedAddr(a.id);
+    setF(p => ({ ...p, street: a.street, city: a.city, state: a.state, zip: a.zip, phone: a.phone || p.phone }));
+  };
 
   if (!isAuthed) return <Navigate to="/login" replace state={{ from: '/checkout' }}/>;
   if (items.length === 0) return <Navigate to="/cart" replace/>;
@@ -37,6 +54,14 @@ export default function Checkout() {
     if (!f.terms) { setErr('Debes aceptar los términos y condiciones.'); return; }
     setBusy(true);
     try {
+      if (saveAddr && !selectedAddr) {
+        try {
+          await pb.collection('addresses').create({
+            label: 'Guardada en checkout', street: f.street, city: f.city, state: f.state, zip: f.zip, phone: f.phone,
+            owner: pb.authStore.record.id,
+          });
+        } catch { /* non-critical, keep going */ }
+      }
       const folio = makeFolio();
       const order = await pb.collection('orders').create({
         folio,
@@ -82,12 +107,18 @@ export default function Checkout() {
               </div>
             </Section>
             <Section title="Entrega">
+              <div className="mb-4">
+                <Addresses selectable selectedId={selectedAddr} onSelect={selectAddr}/>
+              </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <Fld label="Calle y número" full><input className={inp} required value={f.street} onChange={set('street')}/></Fld>
                 <Fld label="Ciudad"><input className={inp} required value={f.city} onChange={set('city')}/></Fld>
                 <Fld label="Estado"><input className={inp} required value={f.state} onChange={set('state')}/></Fld>
                 <Fld label="C.P."><input className={inp} required value={f.zip} onChange={set('zip')}/></Fld>
               </div>
+              {!selectedAddr && (
+                <label className="flex items-center gap-2 text-sm text-white/70 mt-4"><input type="checkbox" checked={saveAddr} onChange={e => setSaveAddr(e.target.checked)} className="accent-[#00AEEF]"/>Guardar esta dirección para próximos pedidos</label>
+              )}
             </Section>
             <Section title="Facturación (CFDI)">
               <label className="flex items-center gap-2 text-sm text-white/70 mb-4"><input type="checkbox" checked={f.invoice} onChange={set('invoice')} className="accent-[#00AEEF]"/>Requiero factura fiscal</label>
