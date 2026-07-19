@@ -36,7 +36,8 @@ const WHATSAPP_DISPLAY = '+56 1105 0049';
 const WHATSAPP = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hola Neonexa, necesito ayuda con mi cuenta.')}`;
 
 export default function Dashboard() {
-  const { user, isAuthed, isAdmin, updateProfile } = useAuth();
+  const { user, isAuthed, isAdmin, isVerified, resendVerification, updateProfile } = useAuth();
+  const [resendState, setResendState] = useState('idle'); // idle | sending | sent
   const { membership } = useMembership();
   const [tab, setTab] = useState('pedidos');
   const [orders, setOrders] = useState([]);
@@ -69,6 +70,11 @@ export default function Dashboard() {
   };
   const unread = notifs.filter(n => !n.read).length;
 
+  const resend = async () => {
+    setResendState('sending');
+    try { await resendVerification(); setResendState('sent'); } catch { setResendState('idle'); }
+  };
+
   if (!isAuthed) return <Navigate to="/login" replace />;
 
   const tabs = [
@@ -96,6 +102,19 @@ export default function Dashboard() {
             <Link to="/dtf/textil" className="nx-btn-primary px-5 py-3 inline-flex items-center gap-2"><Plus size={16}/>Nuevo pedido</Link>
           </div>
         </div>
+
+        {!isVerified && (
+          <div className="mt-6 nx-card p-4 border border-[#FFD400]/40 bg-[#FFD400]/5 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm text-white/70">Tu correo <b>{user?.email}</b> aún no está verificado. Revisa tu bandeja de entrada para confirmarlo.</div>
+            {resendState === 'sent' ? (
+              <span className="text-xs text-[#3ddc84] font-display uppercase tracking-widest">Correo reenviado</span>
+            ) : (
+              <button onClick={resend} disabled={resendState === 'sending'} className="nx-btn-ghost px-4 py-2 text-xs shrink-0">
+                {resendState === 'sending' ? 'Enviando…' : 'Reenviar correo de verificación'}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="mt-10 flex gap-2 border-b border-white/10">
           {tabs.map(t => {

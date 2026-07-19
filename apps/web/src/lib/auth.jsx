@@ -11,7 +11,9 @@ export function AuthProvider({ children }) {
     isAuthed: pb.authStore.isValid,
     isAdmin: user?.role === 'admin',
     isStaff: ['admin', 'operador', 'ventas'].includes(user?.role),
+    isVerified: !!user?.verified,
     login: (email, password) => pb.collection('users').authWithPassword(email, password),
+    resendVerification: () => pb.collection('users').requestVerification(user.email),
     signup: async (fields) => {
       const { email, password, name, phone = '', company = '', rfc = '' } = fields;
       await pb.collection('users').create({

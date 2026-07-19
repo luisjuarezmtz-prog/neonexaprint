@@ -34,8 +34,9 @@ function toOrderItem(orderId, it) {
 
 export default function Checkout() {
   const { items, subtotal, clear } = useCart();
-  const { user, isAuthed } = useAuth();
+  const { user, isAuthed, isVerified, resendVerification } = useAuth();
   const nav = useNavigate();
+  const [resendState, setResendState] = useState('idle'); // idle | sending | sent
   const [f, setF] = useState({
     name: user?.name || '', email: user?.email || '', phone: user?.phone || '',
     street: '', city: '', state: '', zip: '',
@@ -70,9 +71,15 @@ export default function Checkout() {
   const total = subtotal * 1.16;
   const amountDue = payMode === 'anticipo' ? +(total * 0.5).toFixed(2) : +total.toFixed(2);
 
+  const resend = async () => {
+    setResendState('sending');
+    try { await resendVerification(); setResendState('sent'); } catch { setResendState('idle'); }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setErr('');
+    if (!isVerified) { setErr('Verifica tu correo antes de pagar.'); return; }
     if (!f.terms) { setErr('Debes aceptar los términos y condiciones.'); return; }
     setBusy(true);
     try {
@@ -178,8 +185,20 @@ export default function Checkout() {
               <input type="checkbox" checked={f.terms} onChange={set('terms')} className="mt-1 accent-[#00AEEF]"/>
               <span>Acepto términos, condiciones y política de producción.</span>
             </label>
+            {!isVerified && (
+              <div className="mt-4 p-3 rounded border border-[#FFD400]/40 bg-[#FFD400]/5 text-xs text-white/70">
+                Verifica tu correo antes de pagar.{' '}
+                {resendState === 'sent' ? (
+                  <span className="text-[#3ddc84]">Correo reenviado.</span>
+                ) : (
+                  <button type="button" onClick={resend} disabled={resendState === 'sending'} className="text-[#00F0FF] underline">
+                    {resendState === 'sending' ? 'Enviando…' : 'Reenviar correo'}
+                  </button>
+                )}
+              </div>
+            )}
             {err && <div className="text-[#FF2D95] text-sm mt-3">{err}</div>}
-            <button disabled={busy} className="nx-btn-primary w-full py-3 mt-5 flex items-center justify-center gap-2">
+            <button disabled={busy || !isVerified} className="nx-btn-primary w-full py-3 mt-5 flex items-center justify-center gap-2 disabled:opacity-50">
               {busy ? <Loader2 className="animate-spin" size={16}/> : <CreditCard size={16}/>} Confirmar y pagar
             </button>
             <p className="text-[10px] text-white/35 mt-3 leading-relaxed">El cobro se confirma vía webhook del proveedor de pagos. Se registra la transacción y estados de pago (pendiente / pagado / fallido / reembolsado).</p>

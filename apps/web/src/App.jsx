@@ -11,6 +11,7 @@ import PersonalizarProducto from './pages/PersonalizarProducto';
 import Membresias from './pages/Membresias';
 import Dashboard from './pages/Dashboard';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
+import VerifyEmail from './pages/VerifyEmail';
 import MockupTool from './pages/tools/MockupTool';
 import PrintTool from './pages/tools/PrintTool';
 import HalftoneTool from './pages/tools/HalftoneTool';
@@ -51,6 +52,7 @@ function App() {
             <Route path="/membresias" element={<Membresias />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/verificar" element={<VerifyEmail />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/dtf/textil" element={<DtfTextil />} />
