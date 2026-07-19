@@ -8,7 +8,7 @@ export const TOOLS = [
   { slug: 'upscaler', name: 'Mejorador HD/4K para DTF', desc: 'Aumenta resolución y nitidez para impresión.', priority: 2 },
   { slug: 'vectorizer', name: 'Vectorizador IA (PNG → SVG)', desc: 'Convierte raster a vectores editables.', priority: 2 },
   { slug: 'transparency-cleaner', name: 'Eliminador de transparencias y bordes blancos', desc: 'Corrige píxeles semitransparentes, halos y bordes no deseados.', priority: 2 },
-  { slug: 'halftone-smart', name: 'Semitonos inteligentes', desc: 'Genera semitonos considerando color de prenda y parámetros de impresión.', priority: 2 },
+  { slug: 'halftone-smart', name: 'Halftone Studio Pro', desc: 'Semitonos profesionales con DPI/LPI, formas de punto, separación CMYK, base blanca con choke y vista sobre prenda.', priority: 2 },
   { slug: 'shirt-simulator', name: 'Simulador sobre playeras', desc: 'Previsualiza el diseño sobre prendas y colores distintos.', priority: 2 },
   { slug: 'rip-preparer', name: 'Preparador automático para RIP', desc: 'Prepara archivos para Acrorip, Maintop, CADlink, Flexi y otros.', priority: 2 },
 ];
