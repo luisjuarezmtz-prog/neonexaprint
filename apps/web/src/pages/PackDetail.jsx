@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
 import { PACK_CATEGORIES, effectivePrice } from '@/pages/Packs';
-import { Loader2, Images, ShieldCheck, CreditCard } from 'lucide-react';
+import { Loader2, Images, ShieldCheck, CreditCard, Heart } from 'lucide-react';
 
 const LICENSE_LABEL = {
   personal: 'Uso personal',
@@ -21,6 +21,7 @@ export default function PackDetail() {
   const [pack, setPack] = useState(null);
   const [images, setImages] = useState([]);
   const [owned, setOwned] = useState(false);
+  const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -37,10 +38,28 @@ export default function PackDetail() {
             `pack = "${p.id}" && owner = "${pb.authStore.record.id}" && payment_status = "pagado"`
           ).catch(() => null);
           setOwned(!!purchase);
+          const favs = await pb.collection('image_favorites').getFullList({
+            filter: pb.filter('owner = {:o}', { o: pb.authStore.record.id }),
+          }).catch(() => []);
+          setFavorites(favs);
         }
       } catch { setPack(null); } finally { setLoading(false); }
     })();
   }, [slug, isAuthed]);
+
+  const toggleFavorite = async (imgId) => {
+    if (!isAuthed) { nav('/login', { state: { from: `/packs/${slug}` } }); return; }
+    const existing = favorites.find(f => f.pack_image === imgId);
+    try {
+      if (existing) {
+        await pb.collection('image_favorites').delete(existing.id);
+        setFavorites(favs => favs.filter(f => f.id !== existing.id));
+      } else {
+        const rec = await pb.collection('image_favorites').create({ pack_image: imgId, owner: pb.authStore.record.id });
+        setFavorites(favs => [...favs, rec]);
+      }
+    } catch { /* ignore */ }
+  };
 
   const comprar = async () => {
     if (!isAuthed) { nav('/login', { state: { from: `/packs/${slug}` } }); return; }
@@ -70,11 +89,18 @@ export default function PackDetail() {
             <div className="mt-8">
               <div className="font-display uppercase tracking-widest text-sm text-[#00F0FF] mb-3">Muestras {owned ? '(ya son tuyas)' : '(vista previa protegida)'}</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {images.map(img => (
-                  <div key={img.id} className="nx-card overflow-hidden aspect-square nx-checker flex items-center justify-center">
-                    {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <Images size={32} className="text-white/30"/>}
-                  </div>
-                ))}
+                {images.map(img => {
+                  const isFav = favorites.some(f => f.pack_image === img.id);
+                  return (
+                    <div key={img.id} className="nx-card overflow-hidden aspect-square nx-checker flex items-center justify-center relative group">
+                      {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <Images size={32} className="text-white/30"/>}
+                      <button onClick={() => toggleFavorite(img.id)} title={isFav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition">
+                        <Heart size={14} className={isFav ? 'fill-[#FF2D95] text-[#FF2D95]' : 'text-white/70'}/>
+                      </button>
+                    </div>
+                  );
+                })}
                 {images.length === 0 && <div className="col-span-full text-white/40 text-sm">Aún no hay muestras cargadas.</div>}
               </div>
             </div>

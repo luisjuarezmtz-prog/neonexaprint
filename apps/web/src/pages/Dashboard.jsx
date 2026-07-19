@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useMembership, isMembershipActive } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
-import { Package, FileImage, FileText, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star } from 'lucide-react';
+import { Package, FileImage, FileText, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star, Heart } from 'lucide-react';
 import { toolBySlug } from '@/lib/tools';
 
 export const STATUS_META = {
@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [toolJobs, setToolJobs] = useState([]);
   const [packPurchases, setPackPurchases] = useState([]);
+  const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,7 +62,8 @@ export default function Dashboard() {
       pb.collection('membership_history').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('tool_jobs').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('pack_purchases').getFullList({ filter: 'payment_status = "pagado"', sort: '-created', expand: 'pack' }).catch(() => []),
-    ]).then(([o, q, fl, d, n, h, tj, pp]) => { setOrders(o); setQuotes(q); setFiles(fl); setDesigns(d); setNotifs(n); setHistory(h); setToolJobs(tj); setPackPurchases(pp); }).finally(() => setLoading(false));
+      pb.collection('image_favorites').getFullList({ sort: '-created', expand: 'pack_image,pack_image.pack' }).catch(() => []),
+    ]).then(([o, q, fl, d, n, h, tj, pp, fav]) => { setOrders(o); setQuotes(q); setFiles(fl); setDesigns(d); setNotifs(n); setHistory(h); setToolJobs(tj); setPackPurchases(pp); setFavorites(fav); }).finally(() => setLoading(false));
   }, [isAuthed]);
 
   const markRead = async (n) => {
@@ -83,6 +85,7 @@ export default function Dashboard() {
     { id: 'notificaciones', label: `Notificaciones${unread ? ` (${unread})` : ''}`, icon: Bell },
     { id: 'membresia', label: 'Membresía', icon: Crown },
     { id: 'packs', label: 'Mis Packs', icon: Images },
+    { id: 'favoritos', label: `Favoritos${favorites.length ? ` (${favorites.length})` : ''}`, icon: Heart },
     { id: 'trabajos', label: 'Trabajos Tools', icon: Wrench },
     { id: 'archivos', label: 'Archivos', icon: FileImage },
     { id: 'datos', label: 'Mis datos', icon: User2 },
@@ -137,6 +140,7 @@ export default function Dashboard() {
             {tab === 'notificaciones' && <Notifs notifs={notifs} markRead={markRead}/>}
             {tab === 'membresia' && <Membresia membership={membership} history={history}/>}
             {tab === 'packs' && <MisPacks purchases={packPurchases}/>}
+            {tab === 'favoritos' && <Favoritos favorites={favorites}/>}
             {tab === 'trabajos' && <ToolJobs jobs={toolJobs}/>}
             {tab === 'archivos' && <Files files={files}/>}
             {tab === 'datos' && (
@@ -311,13 +315,16 @@ function MisPacks({ purchases }) {
 function MiPack({ purchase }) {
   const pack = purchase.expand?.pack;
   const [images, setImages] = useState([]);
+  const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(null);
 
   useEffect(() => {
     if (!pack) { setLoading(false); return; }
-    pb.collection('pack_images').getFullList({ filter: `pack = "${pack.id}"`, sort: 'sort' })
-      .then(setImages).catch(() => setImages([])).finally(() => setLoading(false));
+    Promise.all([
+      pb.collection('pack_images').getFullList({ filter: `pack = "${pack.id}"`, sort: 'sort' }).catch(() => []),
+      pb.collection('image_favorites').getFullList({ filter: pb.filter('owner = {:o}', { o: pb.authStore.record.id }) }).catch(() => []),
+    ]).then(([imgs, favs]) => { setImages(imgs); setFavorites(favs); }).finally(() => setLoading(false));
   }, [pack]);
 
   const download = async (img) => {
@@ -326,6 +333,19 @@ function MiPack({ purchase }) {
       const { url } = await pb.send('/api/packs/download', { method: 'POST', body: { packImageId: img.id } });
       window.open(url, '_blank');
     } catch { /* ignore */ } finally { setDownloading(null); }
+  };
+
+  const toggleFavorite = async (imgId) => {
+    const existing = favorites.find(f => f.pack_image === imgId);
+    try {
+      if (existing) {
+        await pb.collection('image_favorites').delete(existing.id);
+        setFavorites(favs => favs.filter(f => f.id !== existing.id));
+      } else {
+        const rec = await pb.collection('image_favorites').create({ pack_image: imgId, owner: pb.authStore.record.id });
+        setFavorites(favs => [...favs, rec]);
+      }
+    } catch { /* ignore */ }
   };
 
   if (!pack) return null;
@@ -337,18 +357,56 @@ function MiPack({ purchase }) {
       </div>
       {loading ? <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]" size={20}/></div> : (
         <div className="mt-4 grid sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {images.map(img => (
-            <div key={img.id} className="nx-card overflow-hidden">
-              <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden">
-                {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <FileImage size={32} className="text-white/30"/>}
+          {images.map(img => {
+            const isFav = favorites.some(f => f.pack_image === img.id);
+            return (
+              <div key={img.id} className="nx-card overflow-hidden">
+                <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden relative">
+                  {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <FileImage size={32} className="text-white/30"/>}
+                  <button onClick={() => toggleFavorite(img.id)} title={isFav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition">
+                    <Heart size={14} className={isFav ? 'fill-[#FF2D95] text-[#FF2D95]' : 'text-white/70'}/>
+                  </button>
+                </div>
+                <button onClick={() => download(img)} disabled={downloading === img.id} className="w-full p-2 text-xs flex items-center justify-center gap-1.5 text-[#00F0FF] hover:bg-white/5">
+                  {downloading === img.id ? <Loader2 size={13} className="animate-spin"/> : <Download size={13}/>} Descargar
+                </button>
               </div>
-              <button onClick={() => download(img)} disabled={downloading === img.id} className="w-full p-2 text-xs flex items-center justify-center gap-1.5 text-[#00F0FF] hover:bg-white/5">
-                {downloading === img.id ? <Loader2 size={13} className="animate-spin"/> : <Download size={13}/>} Descargar
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+}
+
+function Favoritos({ favorites }) {
+  if (favorites.length === 0) {
+    return (
+      <div className="nx-card p-16 text-center">
+        <div className="font-display text-2xl uppercase">Sin favoritos todavía</div>
+        <p className="text-white/60 mt-2">Marca imágenes con el corazón en cualquier pack para guardarlas aquí.</p>
+        <Link to="/packs" className="nx-btn-primary px-5 py-3 inline-block mt-6">Ver packs</Link>
+      </div>
+    );
+  }
+  return (
+    <div className="grid sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      {favorites.map(f => {
+        const img = f.expand?.pack_image;
+        const pack = img?.expand?.pack;
+        if (!img) return null;
+        return (
+          <div key={f.id} className="nx-card overflow-hidden">
+            <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden">
+              {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <FileImage size={32} className="text-white/30"/>}
+            </div>
+            <div className="p-3">
+              {pack && <Link to={`/packs/${pack.slug}`} className="text-sm font-medium truncate hover:text-[#00F0FF] block">{pack.name}</Link>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
