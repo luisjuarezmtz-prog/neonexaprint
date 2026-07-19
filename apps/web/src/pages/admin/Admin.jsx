@@ -134,6 +134,7 @@ function Pedidos({ orders, reload }) {
   const { user } = useAuth();
   const [saving, setSaving] = useState(null);
   const [comments, setComments] = useState({});
+  const [filesOpen, setFilesOpen] = useState(null);
   const update = async (o, field, value) => {
     setSaving(o.id);
     try {
@@ -187,6 +188,10 @@ function Pedidos({ orders, reload }) {
               <input value={comments[o.id] || ''} onChange={e => setComments(c => ({ ...c, [o.id]: e.target.value }))} placeholder="Nota interna / mensaje al cliente" className={sel + ' w-full'}/>
             </label>
           </div>
+          <button onClick={() => setFilesOpen(filesOpen === o.id ? null : o.id)} className="nx-btn-ghost px-3 py-1.5 text-xs mt-3">
+            {filesOpen === o.id ? 'Ocultar archivos' : 'Ver / subir archivos'}
+          </button>
+          {filesOpen === o.id && <OrderFiles order={o}/>}
           {(o.events || []).length > 0 && (
             <div className="mt-4 border-t border-white/10 pt-3 space-y-1">
               <div className="text-[11px] uppercase tracking-widest text-white/40 mb-1">Historial de cambios</div>
@@ -202,6 +207,70 @@ function Pedidos({ orders, reload }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+const FILE_KIND_LABEL = { original: 'Original', processed: 'Procesado', approved: 'Aprobado', production: 'Producción' };
+
+function OrderFiles({ order }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [kind, setKind] = useState('processed');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const load = () => pb.collection('files').getFullList({ filter: `order = "${order.id}"`, sort: 'created' }).then(setFiles).catch(() => setFiles([])).finally(() => setLoading(false));
+  useEffect(load, []);
+
+  const upload = async () => {
+    if (!file) { setMsg('Selecciona un archivo.'); return; }
+    setBusy(true); setMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('name', file.name);
+      fd.append('kind', kind);
+      fd.append('asset', file);
+      fd.append('order', order.id);
+      fd.append('owner', order.owner);
+      await pb.collection('files').create(fd);
+      setFile(null);
+      load();
+    } catch (e) { setMsg(e?.message || 'No se pudo subir el archivo.'); } finally { setBusy(false); }
+  };
+
+  const openFile = async (f) => {
+    try {
+      const token = await pb.files.getToken();
+      window.open(pb.files.getUrl(f, f.asset, { token }), '_blank');
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="mt-3 border-t border-white/10 pt-3">
+      {loading ? <Loader2 className="animate-spin text-[#00AEEF]" size={16}/> : (
+        <div className="space-y-2">
+          {files.map(f => (
+            <div key={f.id} className="flex items-center gap-3 text-sm">
+              <span className="text-xs px-2 py-0.5 rounded-full font-display uppercase tracking-widest text-[#00F0FF] bg-[#00AEEF]/10">{FILE_KIND_LABEL[f.kind] || f.kind}</span>
+              <button onClick={() => openFile(f)} className="text-white/70 hover:text-[#00F0FF] underline truncate">{f.name}</button>
+              <span className="text-white/30 text-xs">{new Date(f.created).toLocaleDateString('es-MX')}</span>
+            </div>
+          ))}
+          {files.length === 0 && <div className="text-white/40 text-sm">Sin archivos para este pedido.</div>}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        <select value={kind} onChange={e => setKind(e.target.value)} className={sel}>
+          <option value="processed">Procesado</option>
+          <option value="approved">Aprobado</option>
+          <option value="production">Producción</option>
+        </select>
+        <input type="file" onChange={e => setFile(e.target.files[0])} className="text-xs text-white/60"/>
+        <button disabled={busy} onClick={upload} className="nx-btn-ghost px-4 py-1.5 text-xs">{busy ? 'Subiendo…' : 'Subir versión'}</button>
+        {msg && <span className="text-[#FF2D95] text-xs">{msg}</span>}
+      </div>
     </div>
   );
 }
@@ -673,7 +742,7 @@ function PackImagesAdmin({ pack, onBack }) {
           {images.map(img => (
             <div key={img.id} className="nx-card overflow-hidden">
               <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden">
-                {img.thumbnail ? <img src={pb.files.getURL(img, img.thumbnail)} alt={img.name} className="max-w-full max-h-full object-contain"/> : <Images size={40} className="text-white/30"/>}
+                {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="max-w-full max-h-full object-contain"/> : <Images size={40} className="text-white/30"/>}
               </div>
               <div className="p-3 flex items-center justify-between gap-2">
                 <div className="text-xs truncate">{img.name}</div>

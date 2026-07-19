@@ -44,7 +44,7 @@ export default function Dashboard() {
     if (!isAuthed) return;
     Promise.all([
       pb.collection('orders').getFullList({ sort: '-created' }).catch(() => []),
-      pb.collection('files').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('files').getFullList({ sort: '-created', expand: 'order' }).catch(() => []),
       pb.collection('designs').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('notifications').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('membership_history').getFullList({ sort: '-created' }).catch(() => []),
@@ -274,7 +274,7 @@ function MiPack({ purchase }) {
           {images.map(img => (
             <div key={img.id} className="nx-card overflow-hidden">
               <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden">
-                {img.thumbnail ? <img src={pb.files.getURL(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <FileImage size={32} className="text-white/30"/>}
+                {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <FileImage size={32} className="text-white/30"/>}
               </div>
               <button onClick={() => download(img)} disabled={downloading === img.id} className="w-full p-2 text-xs flex items-center justify-center gap-1.5 text-[#00F0FF] hover:bg-white/5">
                 {downloading === img.id ? <Loader2 size={13} className="animate-spin"/> : <Download size={13}/>} Descargar
@@ -309,6 +309,8 @@ function ToolJobs({ jobs }) {
   );
 }
 
+const FILE_KIND_LABEL = { original: 'Original', processed: 'Procesado', approved: 'Aprobado', production: 'Producción' };
+
 function Files({ files }) {
   if (files.length === 0) return <div className="nx-card p-16 text-center text-white/60">No tienes archivos cargados todavía. Al crear un pedido, tus archivos originales se guardan aquí de forma privada.</div>;
   return (
@@ -320,7 +322,8 @@ function Files({ files }) {
           </div>
           <div className="p-3">
             <div className="text-sm font-medium truncate">{f.name}</div>
-            <div className="text-[11px] text-white/40 mt-1 uppercase tracking-widest">{f.kind}</div>
+            <div className="text-[11px] text-white/40 mt-1 uppercase tracking-widest">{FILE_KIND_LABEL[f.kind] || f.kind}</div>
+            {f.expand?.order?.folio && <div className="text-[11px] text-[#00F0FF]/70 mt-0.5">Pedido {f.expand.order.folio}</div>}
           </div>
         </div>
       ))}

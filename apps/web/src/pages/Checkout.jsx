@@ -85,6 +85,9 @@ export default function Checkout() {
         meta: { note: 'Intención de pago creada. Pendiente de confirmación por webhook del proveedor.', payMode, total: +total.toFixed(2) },
         owner: pb.authStore.record.id,
       });
+      await Promise.all(
+        items.filter(it => it.fileId).map(it => pb.collection('files').update(it.fileId, { order: order.id }).catch(() => {}))
+      );
       clear();
       const { init_point } = await pb.send('/api/mp/preference', { method: 'POST', body: { orderId: order.id } });
       window.location.href = init_point;

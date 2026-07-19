@@ -90,7 +90,7 @@ export default function Packs() {
             return (
               <Link key={p.id} to={`/packs/${p.slug}`} className="nx-card overflow-hidden group block">
                 <div className="aspect-[4/3] relative overflow-hidden bg-black/40">
-                  {p.cover ? <img src={pb.files.getURL(p, p.cover)} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/> : <div className="w-full h-full flex items-center justify-center"><Images size={48} className="text-white/20"/></div>}
+                  {p.cover ? <img src={pb.files.getUrl(p, p.cover)} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/> : <div className="w-full h-full flex items-center justify-center"><Images size={48} className="text-white/20"/></div>}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent"/>
                   <span className="absolute top-3 left-3 px-2 py-1 text-[10px] font-display tracking-widest bg-[#0B0B0B]/80 text-[#00F0FF] border border-[#00F0FF]/30">{PACK_CATEGORIES.find(c => c.id === p.category)?.label || p.category}</span>
                 </div>

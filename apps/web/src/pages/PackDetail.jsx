@@ -72,7 +72,7 @@ export default function PackDetail() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {images.map(img => (
                   <div key={img.id} className="nx-card overflow-hidden aspect-square nx-checker flex items-center justify-center">
-                    {img.thumbnail ? <img src={pb.files.getURL(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <Images size={32} className="text-white/30"/>}
+                    {img.thumbnail ? <img src={pb.files.getUrl(img, img.thumbnail)} alt={img.name} className="w-full h-full object-cover"/> : <Images size={32} className="text-white/30"/>}
                   </div>
                 ))}
                 {images.length === 0 && <div className="col-span-full text-white/40 text-sm">Aún no hay muestras cargadas.</div>}
