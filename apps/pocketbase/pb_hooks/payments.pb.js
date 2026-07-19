@@ -101,11 +101,14 @@ routerAdd("POST", "/api/mp/pack-preference", (e) => {
     // "Un mismo pack no debe cobrarse dos veces al mismo usuario salvo nueva
     // versión claramente diferenciada" — block only if already paid for the
     // exact same version.
-    const already = $app.findFirstRecordByFilter(
-        "pack_purchases",
-        "pack = {:p} && owner = {:o} && payment_status = 'pagado' && version_purchased = {:v}",
-        { p: pack.id, o: auth.id, v: pack.get("version") || "" }
-    );
+    let already = null;
+    try {
+        already = $app.findFirstRecordByFilter(
+            "pack_purchases",
+            "pack = {:p} && owner = {:o} && payment_status = 'pagado' && version_purchased = {:v}",
+            { p: pack.id, o: auth.id, v: pack.get("version") || "" }
+        );
+    } catch (_) { /* no matching purchase — fine, continue */ }
     if (already) throw new BadRequestError("Ya compraste esta versión de este pack.");
 
     const now = new Date();

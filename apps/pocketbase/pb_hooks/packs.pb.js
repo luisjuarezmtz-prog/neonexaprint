@@ -17,15 +17,18 @@ routerAdd("POST", "/api/packs/download", (e) => {
     try { packImage = $app.findRecordById("pack_images", data.packImageId); }
     catch (_) { throw new NotFoundError("Imagen no encontrada."); }
 
-    const purchase = $app.findFirstRecordByFilter(
-        "pack_purchases",
-        "pack = {:p} && owner = {:o} && payment_status = 'pagado'",
-        { p: packImage.get("pack"), o: auth.id }
-    );
-    if (!purchase) throw new ForbiddenError("No has comprado el pack de esta imagen.");
+    let purchase;
+    try {
+        purchase = $app.findFirstRecordByFilter(
+            "pack_purchases",
+            "pack = {:p} && owner = {:o} && payment_status = 'pagado'",
+            { p: packImage.get("pack"), o: auth.id }
+        );
+    } catch (_) { throw new ForbiddenError("No has comprado el pack de esta imagen."); }
 
-    const original = $app.findFirstRecordByFilter("pack_originals", "pack_image = {:i}", { i: packImage.id });
-    if (!original) throw new NotFoundError("Archivo original no disponible.");
+    let original;
+    try { original = $app.findFirstRecordByFilter("pack_originals", "pack_image = {:i}", { i: packImage.id }); }
+    catch (_) { throw new NotFoundError("Archivo original no disponible."); }
 
     purchase.set("downloads_count", (purchase.get("downloads_count") || 0) + 1);
     purchase.set("last_download_at", new Date().toISOString());
