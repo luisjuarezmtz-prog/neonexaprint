@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Navigate, useNavigate, Link } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import PageShell from '@/components/PageShell';
 import { useCart } from '@/lib/cart';
 import { useAuth } from '@/lib/auth';
 import pb from '@/lib/pocketbaseClient';
 import { money, makeFolio } from '@/lib/neonexa';
-import { Loader2, CheckCircle2, CreditCard } from 'lucide-react';
+import { Loader2, CreditCard } from 'lucide-react';
 
 const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
 
@@ -20,13 +20,12 @@ export default function Checkout() {
     terms: false,
   });
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(null);
   const [err, setErr] = useState('');
   const [payMode, setPayMode] = useState('total');
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
   if (!isAuthed) return <Navigate to="/login" replace state={{ from: '/checkout' }}/>;
-  if (items.length === 0 && !done) return <Navigate to="/cart" replace/>;
+  if (items.length === 0) return <Navigate to="/cart" replace/>;
 
   const cur = items[0]?.currency || 'MXN';
   const total = subtotal * 1.16;
@@ -62,29 +61,12 @@ export default function Checkout() {
         owner: pb.authStore.record.id,
       });
       clear();
-      setDone({ folio });
+      const { init_point } = await pb.send('/api/mp/preference', { method: 'POST', body: { orderId: order.id } });
+      window.location.href = init_point;
     } catch (ex) {
-      setErr(ex?.message || 'No se pudo crear el pedido.');
+      setErr(ex?.message || 'No se pudo iniciar el pago. Tu pedido quedó guardado, puedes reintentar desde "Mis pedidos".');
     } finally { setBusy(false); }
   };
-
-  if (done) {
-    return (
-      <PageShell>
-        <div className="max-w-xl mx-auto px-6 py-24 text-center">
-          <CheckCircle2 className="mx-auto text-[#00F0FF]" size={64}/>
-          <h1 className="font-display text-4xl font-black uppercase mt-6">Pedido recibido</h1>
-          <p className="text-white/60 mt-3">Tu folio de orden es</p>
-          <div className="font-display text-3xl text-[#00AEEF] mt-2">{done.folio}</div>
-          <p className="text-white/50 text-sm mt-4">Estado inicial: <b>Recibido</b>. Te avisaremos por WhatsApp cuando pase a revisión y producción.</p>
-          <div className="mt-8 flex gap-3 justify-center">
-            <Link to="/dashboard" className="nx-btn-primary px-6 py-3">Ver mis pedidos</Link>
-            <Link to="/" className="nx-btn-ghost px-6 py-3">Inicio</Link>
-          </div>
-        </div>
-      </PageShell>
-    );
-  }
 
   return (
     <PageShell>

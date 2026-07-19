@@ -29,6 +29,7 @@ import DtfTextil from './pages/dtf/DtfTextil';
 import DtfUv from './pages/dtf/DtfUv';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
+import CheckoutRetorno from './pages/CheckoutRetorno';
 import Admin from './pages/admin/Admin';
 import WhatsAppButton from './components/WhatsAppButton';
 
@@ -53,6 +54,7 @@ function App() {
             <Route path="/dtf/uv" element={<DtfUv />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/checkout/retorno" element={<CheckoutRetorno />} />
             <Route path="/tools" element={<ToolsHub />} />
             <Route path="/tools/inspector" element={<InspectorTool />} />
             <Route path="/tools/calculadora" element={<CalculadoraTool />} />
