@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+app.tar.gz
+
+# PocketBase runtime data — contains real customer/order/payment data, never commit
+apps/pocketbase/pb_data/

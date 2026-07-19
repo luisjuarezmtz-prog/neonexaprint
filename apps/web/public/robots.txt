@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://neonexaprint.com.mx/sitemap.xml

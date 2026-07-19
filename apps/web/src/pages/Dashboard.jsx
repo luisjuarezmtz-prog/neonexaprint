@@ -1,0 +1,283 @@
+import React, { useEffect, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import PageShell from '@/components/PageShell';
+import { useAuth } from '@/lib/auth';
+import { useMembership, isMembershipActive } from '@/lib/membership';
+import pb from '@/lib/pocketbaseClient';
+import { money } from '@/lib/neonexa';
+import { Package, FileImage, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench } from 'lucide-react';
+import { toolBySlug } from '@/lib/tools';
+
+export const STATUS_META = {
+  recibido: { label: 'Recibido', color: '#00AEEF' },
+  en_revision: { label: 'En revisión', color: '#00F0FF' },
+  requiere_correccion: { label: 'Requiere corrección', color: '#FFD400' },
+  aprobado: { label: 'Aprobado', color: '#00F0FF' },
+  en_produccion: { label: 'En producción', color: '#00AEEF' },
+  listo: { label: 'Listo', color: '#00F0FF' },
+  enviado: { label: 'Enviado', color: '#00AEEF' },
+  entregado: { label: 'Entregado', color: '#3ddc84' },
+  cancelado: { label: 'Cancelado', color: '#FF2D95' },
+};
+export const PAY_META = {
+  pendiente: '#FFD400', pagado: '#3ddc84', fallido: '#FF2D95', reembolsado: '#00F0FF',
+};
+
+const WHATSAPP_NUMBER = '56110050049';
+const WHATSAPP_DISPLAY = '+56 1105 0049';
+const WHATSAPP = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hola Neonexa, necesito ayuda con mi cuenta.')}`;
+
+export default function Dashboard() {
+  const { user, isAuthed, isAdmin, updateProfile } = useAuth();
+  const { membership } = useMembership();
+  const [tab, setTab] = useState('pedidos');
+  const [orders, setOrders] = useState([]);
+  const [files, setFiles] = useState([]);
+  const [designs, setDesigns] = useState([]);
+  const [notifs, setNotifs] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [toolJobs, setToolJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    Promise.all([
+      pb.collection('orders').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('files').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('designs').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('notifications').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('membership_history').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('tool_jobs').getFullList({ sort: '-created' }).catch(() => []),
+    ]).then(([o, fl, d, n, h, tj]) => { setOrders(o); setFiles(fl); setDesigns(d); setNotifs(n); setHistory(h); setToolJobs(tj); }).finally(() => setLoading(false));
+  }, [isAuthed]);
+
+  const markRead = async (n) => {
+    if (n.read) return;
+    try { await pb.collection('notifications').update(n.id, { read: true }); setNotifs(p => p.map(x => x.id === n.id ? { ...x, read: true } : x)); } catch { /* ignore */ }
+  };
+  const unread = notifs.filter(n => !n.read).length;
+
+  if (!isAuthed) return <Navigate to="/login" replace />;
+
+  const tabs = [
+    { id: 'pedidos', label: 'Pedidos', icon: Package },
+    { id: 'notificaciones', label: `Notificaciones${unread ? ` (${unread})` : ''}`, icon: Bell },
+    { id: 'membresia', label: 'Membresía', icon: Crown },
+    { id: 'trabajos', label: 'Trabajos Tools', icon: Wrench },
+    { id: 'archivos', label: 'Archivos', icon: FileImage },
+    { id: 'datos', label: 'Mis datos', icon: User2 },
+  ];
+
+  return (
+    <PageShell>
+      <div className="max-w-[90rem] mx-auto px-6 pt-14 pb-24">
+        <div className="flex items-end justify-between flex-wrap gap-6">
+          <div>
+            <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs">MI CUENTA</div>
+            <h1 className="font-display text-5xl md:text-6xl font-black mt-3 uppercase">Hola, <span className="text-[#00AEEF]">{user?.name || 'creador'}</span></h1>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            {isAdmin && <Link to="/admin" className="nx-btn-ghost px-5 py-3 inline-flex items-center gap-2"><Shield size={16}/>Admin</Link>}
+            <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" aria-label={`Soporte por WhatsApp al ${WHATSAPP_DISPLAY}`} className="nx-btn-ghost px-5 py-3 inline-flex items-center gap-2"><MessageCircle size={16}/>Soporte {WHATSAPP_DISPLAY}</a>
+            <Link to="/dtf/textil" className="nx-btn-primary px-5 py-3 inline-flex items-center gap-2"><Plus size={16}/>Nuevo pedido</Link>
+          </div>
+        </div>
+
+        <div className="mt-10 flex gap-2 border-b border-white/10">
+          {tabs.map(t => {
+            const Icon = t.icon;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`px-5 py-3 font-display text-xs uppercase tracking-widest flex items-center gap-2 border-b-2 -mb-px transition ${tab === t.id ? 'border-[#00AEEF] text-[#00F0FF]' : 'border-transparent text-white/50 hover:text-white'}`}>
+                <Icon size={14}/>{t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {loading ? (
+          <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]" size={40}/></div>
+        ) : (
+          <div className="mt-8">
+            {tab === 'pedidos' && <Orders orders={orders} designs={designs}/>}
+            {tab === 'notificaciones' && <Notifs notifs={notifs} markRead={markRead}/>}
+            {tab === 'membresia' && <Membresia membership={membership} history={history}/>}
+            {tab === 'trabajos' && <ToolJobs jobs={toolJobs}/>}
+            {tab === 'archivos' && <Files files={files}/>}
+            {tab === 'datos' && <Datos user={user} updateProfile={updateProfile}/>}
+          </div>
+        )}
+      </div>
+    </PageShell>
+  );
+}
+
+function Orders({ orders, designs }) {
+  if (orders.length === 0) {
+    return (
+      <div className="nx-card p-16 text-center">
+        <div className="font-display text-2xl uppercase">Aún no tienes pedidos</div>
+        <p className="text-white/60 mt-2">Crea tu primer pedido de impresión DTF.</p>
+        <div className="mt-6 flex gap-3 justify-center flex-wrap">
+          <Link to="/dtf/textil" className="nx-btn-primary px-5 py-3">DTF Textil</Link>
+          <Link to="/dtf/uv" className="nx-btn-ghost px-5 py-3">DTF UV</Link>
+        </div>
+        {designs.length > 0 && <p className="text-white/40 text-xs mt-6">Tienes {designs.length} diseño(s) guardado(s) en herramientas.</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      {orders.map(o => {
+        const meta = STATUS_META[o.status] || STATUS_META.recibido;
+        return (
+          <div key={o.id} className="nx-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-display text-lg">{o.folio}</div>
+                <div className="text-xs text-white/40">{new Date(o.created).toLocaleString('es-MX')}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs px-3 py-1 rounded-full font-display uppercase tracking-widest" style={{ color: meta.color, background: meta.color + '18' }}>{meta.label}</span>
+                <span className="text-xs px-3 py-1 rounded-full font-display uppercase tracking-widest" style={{ color: PAY_META[o.payment_status] || '#888', background: (PAY_META[o.payment_status] || '#888') + '18' }}>{o.payment_status || 'sin pago'}</span>
+                <span className="font-display font-black text-[#00AEEF]">{money(o.totals?.total, o.totals?.currency || 'MXN')}</span>
+              </div>
+            </div>
+            <div className="mt-4 grid sm:grid-cols-2 gap-2 text-sm text-white/60">
+              {(o.items || []).map((it, i) => (
+                <div key={i} className="flex items-center gap-2"><ChevronRight size={12} className="text-[#00AEEF]"/>{it.title}</div>
+              ))}
+            </div>
+            {(o.events || []).length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/40">
+                {o.events.map((e, i) => (
+                  <span key={i}>{STATUS_META[e.status]?.label || e.status} · {new Date(e.at).toLocaleDateString('es-MX')}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Notifs({ notifs, markRead }) {
+  if (notifs.length === 0) return <div className="nx-card p-16 text-center text-white/60">No tienes notificaciones. Aquí verás avisos de tus pedidos, archivos y membresía.</div>;
+  return (
+    <div className="space-y-3">
+      {notifs.map(n => (
+        <button key={n.id} onClick={() => markRead(n)} className={`w-full text-left nx-card p-4 flex gap-3 items-start transition ${n.read ? 'opacity-60' : ''}`}>
+          <Bell size={18} className={n.read ? 'text-white/40 mt-0.5' : 'text-[#00F0FF] mt-0.5'}/>
+          <div className="flex-1">
+            <div className="font-display text-sm">{n.title}</div>
+            {n.message && <div className="text-sm text-white/60 mt-1">{n.message}</div>}
+            <div className="text-[11px] text-white/35 mt-2">{new Date(n.created).toLocaleString('es-MX')}{!n.read && <span className="ml-2 text-[#FF2D95]">nuevo</span>}</div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Membresia({ membership, history }) {
+  const active = isMembershipActive(membership);
+  return (
+    <div className="space-y-6">
+      <div className="nx-card p-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-widest text-white/50">Estado de membresía</div>
+          <div className="font-display text-2xl font-black mt-1">{membership?.expand?.plan?.name || (membership ? 'Plan Neonexa' : 'Sin membresía')}</div>
+          {membership?.period_end && <div className="text-sm text-white/60 mt-1">Vigente hasta {new Date(membership.period_end).toLocaleDateString('es-MX')}</div>}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm px-4 py-1.5 rounded-full font-display uppercase tracking-widest" style={{ color: active ? '#3ddc84' : '#FF2D95', background: (active ? '#3ddc84' : '#FF2D95') + '20' }}>{active ? 'Activa' : (membership?.status || 'inactiva')}</span>
+          <Link to="/membresias" className="nx-btn-ghost px-4 py-2.5">Gestionar</Link>
+        </div>
+      </div>
+      {history.length > 0 && (
+        <div className="nx-card overflow-hidden">
+          <div className="p-4 font-display text-sm uppercase tracking-widest text-white/60 border-b border-white/10">Historial de facturación</div>
+          <table className="w-full text-sm">
+            <tbody>
+              {history.map(h => (
+                <tr key={h.id} className="border-b border-white/5">
+                  <td className="p-4 text-white/50">{new Date(h.created).toLocaleDateString('es-MX')}</td>
+                  <td className="p-4 uppercase text-xs tracking-widest text-[#00F0FF]">{h.action.replace(/_/g, ' ')}</td>
+                  <td className="p-4 text-white/70">{h.note}</td>
+                  <td className="p-4 font-display text-right">{h.amount ? money(h.amount, h.currency) : '\u2014'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolJobs({ jobs }) {
+  if (jobs.length === 0) return <div className="nx-card p-16 text-center text-white/60">Aún no has usado Neonexa Tools. <Link to="/tools" className="text-[#00F0FF] underline">Explora las 10 herramientas</Link>.</div>;
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {jobs.map(j => {
+        const tool = toolBySlug(j.tool);
+        return (
+          <div key={j.id} className="nx-card p-4 flex gap-3">
+            <div className="w-16 h-16 rounded nx-checker overflow-hidden shrink-0">{(j.output_preview || j.input_preview) ? <img src={j.output_preview || j.input_preview} alt="" className="w-full h-full object-cover"/> : <FileImage size={24} className="text-white/30 m-auto mt-5"/>}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] uppercase tracking-widest text-[#00AEEF]">{tool?.name || j.tool}</div>
+              <div className="text-sm truncate mt-0.5">{j.title || j.input_name || 'Trabajo'}</div>
+              <div className="text-[11px] text-white/40 mt-1">{new Date(j.created).toLocaleString('es-MX')}</div>
+              <div className="text-[11px] mt-1" style={{ color: j.status === 'error' ? '#FF2D95' : '#3ddc84' }}>{j.status}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Files({ files }) {
+  if (files.length === 0) return <div className="nx-card p-16 text-center text-white/60">No tienes archivos cargados todavía. Al crear un pedido, tus archivos originales se guardan aquí de forma privada.</div>;
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {files.map(f => (
+        <div key={f.id} className="nx-card overflow-hidden">
+          <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden">
+            {f.preview ? <img src={f.preview} alt={f.name} className="max-w-full max-h-full object-contain"/> : <FileImage size={48} className="text-white/30"/>}
+          </div>
+          <div className="p-3">
+            <div className="text-sm font-medium truncate">{f.name}</div>
+            <div className="text-[11px] text-white/40 mt-1 uppercase tracking-widest">{f.kind}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Datos({ user, updateProfile }) {
+  const [f, setF] = useState({ name: user?.name || '', phone: user?.phone || '', company: user?.company || '', rfc: user?.rfc || '' });
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
+  const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true); setMsg('');
+    try { await updateProfile(f); setMsg('Datos actualizados.'); } catch { setMsg('No se pudo guardar.'); } finally { setBusy(false); }
+  };
+  return (
+    <form onSubmit={save} className="nx-card p-6 max-w-2xl grid sm:grid-cols-2 gap-4">
+      <label className="block"><span className="text-xs uppercase tracking-widest text-white/60">Nombre</span><input className={inp + ' mt-2'} value={f.name} onChange={set('name')}/></label>
+      <label className="block"><span className="text-xs uppercase tracking-widest text-white/60">Teléfono / WhatsApp</span><input className={inp + ' mt-2'} value={f.phone} onChange={set('phone')}/></label>
+      <label className="block"><span className="text-xs uppercase tracking-widest text-white/60">Email</span><input className={inp + ' mt-2 opacity-60'} value={user?.email} disabled/></label>
+      <label className="block"><span className="text-xs uppercase tracking-widest text-white/60">Empresa</span><input className={inp + ' mt-2'} value={f.company} onChange={set('company')}/></label>
+      <label className="block"><span className="text-xs uppercase tracking-widest text-white/60">RFC</span><input className={inp + ' mt-2'} value={f.rfc} onChange={set('rfc')}/></label>
+      <div className="sm:col-span-2 flex items-center gap-4">
+        <button disabled={busy} className="nx-btn-primary px-6 py-3">{busy ? 'Guardando…' : 'Guardar datos'}</button>
+        {msg && <span className="text-sm text-[#00F0FF]">{msg}</span>}
+      </div>
+    </form>
+  );
+}

@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 30% 4%;
+    --foreground: 0 0% 98%;
+    --card: 222 28% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 222 28% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 196 100% 47%;     /* #00AEEF */
+    --primary-foreground: 220 30% 4%;
+    --secondary: 222 25% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 222 18% 14%;
+    --muted-foreground: 220 10% 64%;
+    --accent: 187 100% 50%;      /* #00F0FF */
+    --accent-foreground: 220 30% 4%;
+    --destructive: 333 100% 58%; /* #FF2D95 */
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 25% 14%;
+    --input: 220 25% 14%;
+    --ring: 196 100% 47%;
+    --radius: 0.25rem;
+
+    --nx-blue: #00AEEF;
+    --nx-cyan: #00F0FF;
+    --nx-magenta: #FF2D95;
+    --nx-yellow: #FFD400;
+    --nx-bg: #0B0B0B;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { background: var(--nx-bg); color: #fff; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: "ss01";
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+.font-display {
+  font-family: 'Exo 2', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.nx-checker {
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,0.08) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.08) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.08) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  background-color: #0B0B0B;
+}
+
+.nx-grid-bg {
+  background-image:
+    linear-gradient(rgba(0,174,239,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,174,239,0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.nx-glow {
+  text-shadow: 0 0 24px rgba(0,174,239,0.55), 0 0 60px rgba(0,174,239,0.25);
+}
+
+.nx-stroke-text {
+  -webkit-text-stroke: 1.5px #00AEEF;
+  color: transparent;
+}
+
+.nx-btn-primary {
+  background: linear-gradient(135deg, #00AEEF 0%, #00F0FF 100%);
+  color: #0B0B0B;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 0 0 1px rgba(0,240,255,0.4), 0 10px 40px -10px rgba(0,174,239,0.6);
+  transition: transform .15s ease-out, box-shadow .2s ease-out;
+}
+.nx-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0,240,255,0.7), 0 18px 50px -10px rgba(0,174,239,0.85); }
+.nx-btn-primary:active { transform: translateY(0) scale(0.985); }
+
+.nx-btn-ghost {
+  border: 1px solid rgba(0,174,239,0.35);
+  color: #fff;
+  background: rgba(11,11,11,0.4);
+  backdrop-filter: blur(8px);
+  font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  transition: all .2s;
+}
+.nx-btn-ghost:hover { border-color: #00F0FF; background: rgba(0,174,239,0.08); }
+
+.nx-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+  border: 1px solid rgba(0,174,239,0.18);
+  border-radius: 4px;
+}
+
+.nx-marquee {
+  display: flex;
+  gap: 3rem;
+  animation: nx-scroll 32s linear infinite;
+  white-space: nowrap;
+  will-change: transform;
+}
+@keyframes nx-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes nx-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.nx-pulse { animation: nx-pulse 2.6s ease-in-out infinite; }
+
+@keyframes nx-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.nx-rise { animation: nx-rise .8s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-marquee, .nx-pulse, .nx-rise { animation: none !important; }
+}
+
+input, textarea, select {
+  font-family: 'Inter', sans-serif;
+}
+
+::selection { background: #00AEEF; color: #0B0B0B; }
