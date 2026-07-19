@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import { ArrowRight } from 'lucide-react';
 
@@ -15,6 +16,10 @@ const PRODUCTS = [
 export default function Products() {
   return (
     <PageShell>
+      <Helmet>
+        <title>Productos personalizables DTF y UV — Neonexa Print</title>
+        <meta name="description" content="Playeras, tazas, termos, DTF por metro y kits corporativos personalizables. Cotiza al instante y produce con Neonexa Print." />
+      </Helmet>
       <section className="relative max-w-[90rem] mx-auto px-6 pt-20 pb-12">
         <div className="font-display tracking-[0.5em] text-[#00F0FF] text-xs">CATÁLOGO NEONEXA</div>
         <h1 className="font-display text-6xl md:text-7xl font-black mt-3 uppercase">Productos<br/><span className="nx-stroke-text">personalizables</span></h1>
@@ -33,7 +38,7 @@ export default function Products() {
               <div className="font-display font-bold text-xl uppercase">{p.name}</div>
               <div className="font-display text-[#00F0FF] mt-1">{p.price}</div>
               <p className="text-white/60 text-sm mt-3">{p.desc}</p>
-              <Link to="/tools/mockup" className="mt-5 inline-flex items-center gap-2 font-display text-xs tracking-[0.3em] uppercase text-white hover:text-[#00F0FF]">
+              <Link to="/tools" className="mt-5 inline-flex items-center gap-2 font-display text-xs tracking-[0.3em] uppercase text-white hover:text-[#00F0FF]">
                 Personalizar <ArrowRight size={14}/>
               </Link>
             </div>

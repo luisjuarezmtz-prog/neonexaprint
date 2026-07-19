@@ -7,6 +7,7 @@ import { useCart } from '@/lib/cart';
 import { useAuth } from '@/lib/auth';
 import { CATEGORIES } from '@/pages/Personalizados';
 import { Loader2, Upload, PenTool, Check, ShoppingCart, Send, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 
 const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
 const lbl = "block text-[11px] uppercase tracking-[0.2em] text-white/60 mb-2";
@@ -77,7 +78,7 @@ export default function PersonalizarProducto() {
   };
 
   const addToCart = async () => {
-    if (!approved) { alert('Por favor aprueba la propuesta/mockup antes de continuar.'); return; }
+    if (!approved) { toast.error('Por favor aprueba la propuesta/mockup antes de continuar.'); return; }
     const fileId = await uploadDesignFile();
     add({
       service: 'producto', type: 'personalizado', title: summaryTitle(), subtotal,
@@ -110,7 +111,7 @@ export default function PersonalizarProducto() {
         owner: user.id,
       });
       setDone(rec.folio);
-    } catch (err) { alert(err?.message || 'No se pudo enviar la solicitud.'); }
+    } catch (err) { toast.error(err?.message || 'No se pudo enviar la solicitud.'); }
     finally { setBusy(false); }
   };
 

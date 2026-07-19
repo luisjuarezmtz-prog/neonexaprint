@@ -29,9 +29,9 @@ export default function SiteFooter() {
             <div className="font-display tracking-[0.22em] text-xs text-[#00AEEF] mb-3">CATÁLOGO</div>
             <ul className="space-y-2 text-white/70">
               <li><Link to="/productos">Productos</Link></li>
-              <li><Link to="/tools/mockup">Mockups</Link></li>
-              <li><Link to="/tools/print">Preparar DTF</Link></li>
-              <li><Link to="/tools/halftone">Semitonos</Link></li>
+              <li><Link to="/tools/shirt-simulator">Mockups</Link></li>
+              <li><Link to="/tools/rip-preparer">Preparar DTF</Link></li>
+              <li><Link to="/tools/halftone-smart">Semitonos</Link></li>
             </ul>
           </div>
           <div>

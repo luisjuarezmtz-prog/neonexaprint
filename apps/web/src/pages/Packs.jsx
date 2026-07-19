@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
@@ -54,6 +55,10 @@ export default function Packs() {
 
   return (
     <PageShell>
+      <Helmet>
+        <title>Packs de diseños DTF listos para imprimir — Neonexa Print</title>
+        <meta name="description" content="Packs de imágenes DTF por paquete completo, fondo transparente y alta resolución con licencia clara. Agrégalos directo a tu pedido de DTF Textil o UV." />
+      </Helmet>
       <section className="max-w-[90rem] mx-auto px-6 pt-16 pb-8">
         <div className="font-display tracking-[0.5em] text-[#FF2D95] text-xs">BIBLIOTECA DE IMÁGENES</div>
         <h1 className="font-display text-5xl md:text-7xl font-black mt-3 uppercase">Packs listos<br/><span className="nx-stroke-text">para imprimir</span></h1>

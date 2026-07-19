@@ -9,6 +9,7 @@ import { CATEGORIES } from '@/pages/Personalizados';
 import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images, ScrollText, FileText, Tag } from 'lucide-react';
 import { TOOLS } from '@/lib/tools';
 import { PACK_CATEGORIES } from '@/pages/Packs';
+import { toast } from 'sonner';
 
 const STATUSES = Object.keys(STATUS_META);
 const PAYS = ['pendiente', 'pagado', 'fallido', 'reembolsado'];
@@ -492,7 +493,7 @@ function ProductosAdmin() {
       if (data.id) await pb.collection('products').update(data.id, data);
       else await pb.collection('products').create(data);
       setEditing(null); load();
-    } catch (e) { alert(e?.message || 'Error al guardar'); }
+    } catch (e) { toast.error(e?.message || 'Error al guardar'); }
   };
   const del = async (id) => { if (!confirm('¿Eliminar producto?')) return; try { await pb.collection('products').delete(id); load(); } catch { /* ignore */ } };
 
@@ -551,7 +552,7 @@ function MembresiasAdmin() {
       if (data.id) await pb.collection('membership_plans').update(data.id, data);
       else await pb.collection('membership_plans').create(data);
       setEditing(null); load();
-    } catch (e) { alert(e?.message || 'Error'); }
+    } catch (e) { toast.error(e?.message || 'Error'); }
   };
   const del = async (id) => { if (!confirm('¿Eliminar plan?')) return; try { await pb.collection('membership_plans').delete(id); load(); } catch { /* ignore */ } };
 
@@ -612,7 +613,7 @@ function CuponesAdmin() {
       if (data.id) await pb.collection('coupons').update(data.id, data);
       else await pb.collection('coupons').create(data);
       setEditing(null); load();
-    } catch (e) { alert(e?.message || 'No se pudo guardar el cupón.'); }
+    } catch (e) { toast.error(e?.message || 'No se pudo guardar el cupón.'); }
   };
   const del = async (id) => { if (!confirm('¿Eliminar cupón?')) return; try { await pb.collection('coupons').delete(id); load(); } catch { /* ignore */ } };
 
@@ -768,7 +769,7 @@ function PacksAdmin() {
       if (data.id) await pb.collection('image_packs').update(data.id, data);
       else await pb.collection('image_packs').create(data);
       setEditing(null); load();
-    } catch (e) { alert(e?.message || 'Error al guardar el pack'); }
+    } catch (e) { toast.error(e?.message || 'Error al guardar el pack'); }
   };
   const del = async (id) => { if (!confirm('¿Eliminar pack? Se borran también sus imágenes.')) return; try { await pb.collection('image_packs').delete(id); load(); } catch { /* ignore */ } };
 

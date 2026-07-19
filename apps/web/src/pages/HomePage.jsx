@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import { ArrowRight, Shirt, Layers, Printer, Sparkles, Coffee, Gift, Tag, UploadCloud, Wrench, Star, Plus, Minus } from 'lucide-react';
 import { useState } from 'react';
@@ -8,15 +9,6 @@ const HERO_IMG = 'https://images.hostinger.com/0e0d1e7f-2997-4aff-ac10-2a6ca99e6
 const DTF_IMG = 'https://images.hostinger.com/46dc9591-c52a-48f3-8f24-c11c77860d4c.png';
 const TSHIRT_BLACK = 'https://images.hostinger.com/b951f346-3a73-4fc7-b1e0-fbc291cc5892.png';
 const TSHIRT_WHITE = 'https://images.hostinger.com/2e414043-c171-40ef-945a-cf788d2c99ce.png';
-
-const PALETTE = [
-  { hex: '#0B0B0B', label: '#0B0B0B' },
-  { hex: '#00AEEF', label: '#00AEEF' },
-  { hex: '#00F0FF', label: '#00F0FF' },
-  { hex: '#FFFFFF', label: '#FFFFFF' },
-  { hex: '#FF2D95', label: '#FF2D95' },
-  { hex: '#FFD400', label: '#FFD400' },
-];
 
 const SERVICES = [
   { icon: Layers, label: 'DTF por metro' },
@@ -30,22 +22,22 @@ const SERVICES = [
 
 const TOOLS = [
   {
-    to: '/tools/mockup',
-    title: 'Mockup Studio',
+    to: '/tools/shirt-simulator',
+    title: 'Simulador sobre playeras',
     sub: 'Coloca tu diseño sobre una playera real, ajusta escala y posición, exporta tu mockup en segundos.',
     icon: Shirt,
     color: '#00AEEF',
   },
   {
-    to: '/tools/print',
-    title: 'Preparar para DTF',
+    to: '/tools/rip-preparer',
+    title: 'Preparador automático para RIP',
     sub: 'Encuadra a tamaño real (cm), agrega sangrado, espeja en horizontal y descarga listo para imprimir.',
     icon: Printer,
     color: '#00F0FF',
   },
   {
-    to: '/tools/halftone',
-    title: 'Conversor de Semitonos',
+    to: '/tools/halftone-smart',
+    title: 'Semitonos inteligentes',
     sub: 'Convierte cualquier imagen a patrón de puntos en tiempo real. Ajusta tamaño, ángulo y contraste.',
     icon: Sparkles,
     color: '#FF2D95',
@@ -78,6 +70,10 @@ function Faq() {
 export default function HomePage() {
   return (
     <PageShell>
+      <Helmet>
+        <title>Neonexa Print — Impresión DTF y UV personalizada en CDMX</title>
+        <meta name="description" content="Playeras, gorras, tazas, termos y kits corporativos con impresión DTF y UV de alta adherencia. Diseña, cotiza e imprime desde el navegador con Neonexa Print." />
+      </Helmet>
       {/* HERO */}
       <section className="relative overflow-hidden min-h-[100dvh] flex items-center">
         <div className="absolute inset-0">
@@ -104,7 +100,7 @@ export default function HomePage() {
               <Link to="/dtf/textil" className="nx-btn-primary px-7 py-4 inline-flex items-center gap-3">
                 <UploadCloud size={18}/> Sube tu archivo
               </Link>
-              <Link to="/tools/mockup" className="nx-btn-ghost px-7 py-4 inline-flex items-center gap-3">
+              <Link to="/tools" className="nx-btn-ghost px-7 py-4 inline-flex items-center gap-3">
                 Conoce Neonexa Tools <ArrowRight size={18}/>
               </Link>
             </div>
@@ -150,7 +146,7 @@ export default function HomePage() {
             { to:'/dtf/textil', icon:Layers, color:'#00AEEF', t:'DTF Textil', d:'Cotiza por metro al instante' },
             { to:'/dtf/uv', icon:Sparkles, color:'#FF2D95', t:'DTF UV', d:'Superficies rígidas y stickers' },
             { to:'/productos', icon:Gift, color:'#FFD400', t:'Personalizados', d:'Playeras, tazas y kits' },
-            { to:'/tools/mockup', icon:Wrench, color:'#00F0FF', t:'Neonexa Tools', d:'Editores en el navegador' },
+            { to:'/tools', icon:Wrench, color:'#00F0FF', t:'Neonexa Tools', d:'Editores en el navegador' },
           ].map(({to,icon:Icon,color,t,d}) => (
             <Link key={to} to={to} className="group nx-card p-6 hover:-translate-y-1 transition-transform relative overflow-hidden">
               <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-25" style={{background:color}}/>
@@ -233,29 +229,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Palette + Typography */}
-      <section className="max-w-[90rem] mx-auto px-6 py-20 grid lg:grid-cols-2 gap-10">
-        <div className="nx-card p-10">
-          <div className="font-display tracking-[0.4em] text-[#00AEEF] text-xs">PALETA DE COLORES</div>
-          <div className="mt-8 grid grid-cols-6 gap-3">
-            {PALETTE.map(c => (
-              <div key={c.hex} className="text-center">
-                <div className="aspect-square rounded border border-white/10 shadow-lg" style={{background:c.hex}}/>
-                <div className="font-mono text-[10px] mt-2 text-white/60">{c.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="nx-card p-10">
-          <div className="font-display tracking-[0.4em] text-[#00AEEF] text-xs">TIPOGRAFÍA</div>
-          <div className="mt-6 font-display font-black text-7xl">EXO 2</div>
-          <div className="font-display tracking-[0.6em] text-sm text-white/60 mt-1">B O L D</div>
-          <div className="mt-6 font-display tracking-[0.18em] text-white/80 text-lg">
-            ABCDEFGHIJKLMN<br/>OPQRSTUVWXYZ<br/>0123456789
-          </div>
-        </div>
-      </section>
-
       {/* Testimonios + Planes */}
       <section className="max-w-[90rem] mx-auto px-6 py-16">
         <div className="grid lg:grid-cols-[1.4fr_1fr] gap-8 items-start">
@@ -315,7 +288,7 @@ export default function HomePage() {
             <p className="mt-6 max-w-xl mx-auto text-white/65">Guarda tus mockups, semitonos y archivos DTF listos para producción en tu propio panel.</p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
               <Link to="/register" className="nx-btn-primary px-8 py-4">Crear cuenta gratis</Link>
-              <Link to="/tools/mockup" className="nx-btn-ghost px-8 py-4">Probar editor</Link>
+              <Link to="/tools" className="nx-btn-ghost px-8 py-4">Probar editor</Link>
             </div>
           </div>
         </div>

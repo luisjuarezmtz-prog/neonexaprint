@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import DtfUploader from '@/components/DtfUploader';
 import { useCart } from '@/lib/cart';
@@ -69,6 +70,10 @@ export default function DtfUv() {
 
   return (
     <PageShell>
+      <Helmet>
+        <title>DTF UV — Impresión sobre superficies rígidas | Neonexa Print</title>
+        <meta name="description" content="Impresión UV sobre superficies rígidas. Elige modalidad, define dimensiones y agrega recargos especiales para tu pedido." />
+      </Helmet>
       <div className="max-w-[80rem] mx-auto px-6 pt-14 pb-24">
         <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs">FLUJO DE PEDIDO</div>
         <h1 className="font-display text-5xl md:text-6xl font-black mt-3 uppercase">DTF <span className="text-[#FF2D95]">UV</span></h1>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import { useAuth } from '@/lib/auth';
 import pb from '@/lib/pocketbaseClient';
@@ -79,6 +80,10 @@ export default function PackDetail() {
 
   return (
     <PageShell>
+      <Helmet>
+        <title>{pack.name} — Pack de diseños DTF | Neonexa Print</title>
+        <meta name="description" content={(pack.short_description || pack.full_description || '').slice(0, 160)} />
+      </Helmet>
       <div className="max-w-[80rem] mx-auto px-6 pt-14 pb-24">
         <div className="grid lg:grid-cols-[1fr_360px] gap-10 items-start">
           <div>
@@ -128,7 +133,7 @@ export default function PackDetail() {
                 {busy ? <Loader2 className="animate-spin" size={16}/> : <CreditCard size={16}/>} Comprar pack completo
               </button>
             )}
-            {err && <div className="text-[#FF2D95] text-sm mt-3">{err}</div>}
+            {err && <div role="alert" className="text-[#FF2D95] text-sm mt-3">{err}</div>}
             <p className="text-[10px] text-white/35 mt-3 leading-relaxed">Se vende el pack completo, no imágenes sueltas. El acceso se desbloquea automáticamente al confirmarse el pago.</p>
           </aside>
         </div>

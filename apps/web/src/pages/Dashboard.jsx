@@ -6,6 +6,7 @@ import { useMembership, isMembershipActive } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
 import { Package, FileImage, FileText, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star, Heart } from 'lucide-react';
+import { toast } from 'sonner';
 import { toolBySlug } from '@/lib/tools';
 
 export const STATUS_META = {
@@ -470,7 +471,7 @@ export function Addresses({ selectable, selectedId, onSelect }) {
       if (data.id) await pb.collection('addresses').update(data.id, data);
       else await pb.collection('addresses').create(data);
       setEditing(null); load();
-    } catch (e) { alert(e?.message || 'No se pudo guardar la dirección.'); }
+    } catch (e) { toast.error(e?.message || 'No se pudo guardar la dirección.'); }
   };
   const del = async (id) => { if (!confirm('¿Eliminar esta dirección?')) return; try { await pb.collection('addresses').delete(id); load(); } catch { /* ignore */ } };
   const makeDefault = async (a) => {

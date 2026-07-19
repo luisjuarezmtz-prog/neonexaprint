@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Routes, BrowserRouter as Router } from 'react-router-dom';
+import { Route, Routes, Navigate, BrowserRouter as Router } from 'react-router-dom';
 import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider } from '@/lib/auth';
 import { CartProvider } from '@/lib/cart';
@@ -15,9 +15,6 @@ import Terminos from './pages/Terminos';
 import Dashboard from './pages/Dashboard';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
 import VerifyEmail from './pages/VerifyEmail';
-import MockupTool from './pages/tools/MockupTool';
-import PrintTool from './pages/tools/PrintTool';
-import HalftoneTool from './pages/tools/HalftoneTool';
 import ToolsHub from './pages/tools/ToolsHub';
 import InspectorTool from './pages/tools/InspectorTool';
 import CalculadoraTool from './pages/tools/CalculadoraTool';
@@ -39,6 +36,7 @@ import PackDetail from './pages/PackDetail';
 import PackRetorno from './pages/PackRetorno';
 import Admin from './pages/admin/Admin';
 import WhatsAppButton from './components/WhatsAppButton';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
@@ -80,11 +78,12 @@ function App() {
             <Route path="/tools/halftone-smart" element={<HalftoneSmartTool />} />
             <Route path="/tools/shirt-simulator" element={<ShirtSimulatorTool />} />
             <Route path="/tools/rip-preparer" element={<RipPreparerTool />} />
-            <Route path="/tools/mockup" element={<MockupTool />} />
-            <Route path="/tools/print" element={<PrintTool />} />
-            <Route path="/tools/halftone" element={<HalftoneTool />} />
+            <Route path="/tools/mockup" element={<Navigate to="/tools/shirt-simulator" replace />} />
+            <Route path="/tools/print" element={<Navigate to="/tools/rip-preparer" replace />} />
+            <Route path="/tools/halftone" element={<Navigate to="/tools/halftone-smart" replace />} />
           </Routes>
           <WhatsAppButton />
+          <Toaster theme="dark" position="top-center" richColors closeButton />
         </Router>
       </CartProvider>
       </MembershipProvider>

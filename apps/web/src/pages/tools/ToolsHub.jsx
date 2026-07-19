@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import { useMembership } from '@/lib/membership';
 import { TOOLS } from '@/lib/tools';
@@ -19,6 +20,10 @@ export default function ToolsHub() {
   const { allowed, loading } = useMembership();
   return (
     <PageShell>
+      <Helmet>
+        <title>Neonexa Tools — 10 herramientas DTF pro en el navegador</title>
+        <meta name="description" content="Inspecciona, cotiza, acomoda, limpia, vectoriza y prepara tus diseños para impresión DTF directo desde el navegador, sin instalar nada." />
+      </Helmet>
       <div className="max-w-[90rem] mx-auto px-6 pt-14 pb-24">
         <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs">NEONEXA TOOLS</div>
         <h1 className="font-display text-5xl md:text-6xl font-black mt-3 uppercase">10 herramientas <span className="text-[#00AEEF]">DTF pro</span></h1>

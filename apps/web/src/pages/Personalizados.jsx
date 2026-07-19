@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
@@ -32,6 +33,10 @@ export default function Personalizados() {
 
   return (
     <PageShell>
+      <Helmet>
+        <title>Productos personalizados con tu diseño — Neonexa Print</title>
+        <meta name="description" content="Elige un producto, sube tu diseño y cotiza al instante. Playeras, gorras, termos, tazas, kits corporativos y proyectos especiales personalizados." />
+      </Helmet>
       <section className="max-w-[90rem] mx-auto px-6 pt-16 pb-8">
         <div className="font-display tracking-[0.5em] text-[#FF2D95] text-xs">NEONEXA PERSONALIZADOS</div>
         <h1 className="font-display text-5xl md:text-7xl font-black mt-3 uppercase">Tu marca<br/><span className="nx-stroke-text">en cada detalle</span></h1>

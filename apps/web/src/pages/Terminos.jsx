@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import { FileText } from 'lucide-react';
 
@@ -10,6 +11,10 @@ const ul = "text-white/70 leading-relaxed list-disc pl-6 space-y-1";
 export default function Terminos() {
   return (
     <PageShell>
+      <Helmet>
+        <title>Términos y Condiciones — Neonexa Print</title>
+        <meta name="description" content="Términos y condiciones de compra, producción y garantía de Neonexa Print para pedidos de impresión DTF y UV." />
+      </Helmet>
       <div className="max-w-3xl mx-auto px-6 pt-16 pb-24">
         <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs flex items-center gap-2"><FileText size={14}/>NEONEXA PRINT</div>
         <h1 className="font-display text-4xl md:text-5xl font-black mt-3 uppercase">Términos y Condiciones</h1>

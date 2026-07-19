@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
 import { useAuth } from '@/lib/auth';
 import { useMembership, isMembershipActive } from '@/lib/membership';
 import { Check, Loader2, Crown, Sparkles, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 const PAY_COLOR = { pendiente: '#FFD400', pagado: '#3ddc84', fallido: '#FF2D95', reembolsado: '#00F0FF' };
 
@@ -64,7 +66,7 @@ export default function Membresias() {
         method: 'POST', body: { planId: plan.id, couponCode: couponInfo?.valid ? coupon.trim() : '' },
       });
       window.location.href = init_point;
-    } catch (e) { alert(e?.response?.message || e?.message || 'No se pudo iniciar el pago.'); setBusy(null); }
+    } catch (e) { toast.error(e?.response?.message || e?.message || 'No se pudo iniciar el pago.'); setBusy(null); }
   };
 
   const cancel = async () => {
@@ -77,7 +79,7 @@ export default function Membresias() {
         note: 'Cancelación al final del periodo pagado', owner: user.id,
       });
       await refresh(); loadAll();
-    } catch (e) { alert(e?.message || 'Error'); } finally { setBusy(null); }
+    } catch (e) { toast.error(e?.message || 'Error'); } finally { setBusy(null); }
   };
 
   const reactivate = async () => {
@@ -86,7 +88,7 @@ export default function Membresias() {
     try {
       await pb.collection('memberships').update(membership.id, { cancel_at_period_end: false, auto_renew: true });
       await refresh(); loadAll();
-    } catch (e) { alert(e?.message || 'Error'); } finally { setBusy(null); }
+    } catch (e) { toast.error(e?.message || 'Error'); } finally { setBusy(null); }
   };
 
   const cur = membership;
@@ -94,6 +96,10 @@ export default function Membresias() {
 
   return (
     <PageShell>
+      <Helmet>
+        <title>Membresías Neonexa Tools — Planes y precios</title>
+        <meta name="description" content="Suscríbete para desbloquear el estudio de mockups, preparación de impresión y convertidor de semitonos con exportación en alta calidad." />
+      </Helmet>
       <section className="max-w-[90rem] mx-auto px-6 pt-16 pb-8">
         <div className="font-display tracking-[0.5em] text-[#00F0FF] text-xs flex items-center gap-2"><Crown size={14}/>MEMBRESÍAS</div>
         <h1 className="font-display text-5xl md:text-7xl font-black mt-3 uppercase">Acceso a<br/><span className="nx-stroke-text">Neonexa Tools</span></h1>
@@ -113,7 +119,7 @@ export default function Membresias() {
             </div>
             <div className="flex items-center gap-3">
               {st && <span className="text-sm px-4 py-1.5 rounded-full font-display uppercase tracking-widest" style={{ color: st.c, background: st.c + '20' }}>{st.t}</span>}
-              {allowed && <Link to="/tools/mockup" className="nx-btn-primary px-5 py-2.5">Abrir Tools</Link>}
+              {allowed && <Link to="/tools" className="nx-btn-primary px-5 py-2.5">Abrir Tools</Link>}
               {cur.cancel_at_period_end
                 ? <button onClick={reactivate} disabled={busy} className="nx-btn-ghost px-4 py-2.5 inline-flex items-center gap-2"><RefreshCw size={14}/>Reactivar</button>
                 : isMembershipActive(cur) && <button onClick={cancel} disabled={busy} className="nx-btn-ghost px-4 py-2.5 inline-flex items-center gap-2"><XCircle size={14}/>Cancelar</button>}

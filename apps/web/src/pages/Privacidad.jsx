@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import { ShieldCheck } from 'lucide-react';
 
@@ -9,6 +10,10 @@ const ul = "text-white/70 leading-relaxed list-disc pl-6 space-y-1";
 export default function Privacidad() {
   return (
     <PageShell>
+      <Helmet>
+        <title>Aviso de Privacidad — Neonexa Print</title>
+        <meta name="description" content="Aviso de privacidad de Neonexa Print conforme a la LFPDPPP: qué datos recabamos, para qué los usamos y cómo ejercer tus derechos ARCO." />
+      </Helmet>
       <div className="max-w-3xl mx-auto px-6 pt-16 pb-24">
         <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs flex items-center gap-2"><ShieldCheck size={14}/>NEONEXA PRINT</div>
         <h1 className="font-display text-4xl md:text-5xl font-black mt-3 uppercase">Aviso de Privacidad</h1>

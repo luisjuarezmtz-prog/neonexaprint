@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet';
 import PageShell from '@/components/PageShell';
 import DtfUploader from '@/components/DtfUploader';
 import { useCart } from '@/lib/cart';
@@ -63,6 +64,10 @@ export default function DtfTextil() {
 
   return (
     <PageShell>
+      <Helmet>
+        <title>DTF Textil — Cotiza tu impresión al instante | Neonexa Print</title>
+        <meta name="description" content="Sube tu diseño, lo analizamos automáticamente, defines medidas y metros y obtienes tu cotización de impresión DTF textil al instante." />
+      </Helmet>
       <div className="max-w-[80rem] mx-auto px-6 pt-14 pb-24">
         <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs">FLUJO DE PEDIDO</div>
         <h1 className="font-display text-5xl md:text-6xl font-black mt-3 uppercase">DTF <span className="text-[#00AEEF]">Textil</span></h1>

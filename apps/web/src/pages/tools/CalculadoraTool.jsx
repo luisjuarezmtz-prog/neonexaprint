@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import ToolShell, { labelCls, inputCls } from '@/components/ToolShell';
-import { recordJob, logUsage } from '@/lib/tools';
+import { recordJob, logUsage, checkLimit } from '@/lib/tools';
+import { useMembership } from '@/lib/membership';
 import { money } from '@/lib/neonexa';
 import pb from '@/lib/pocketbaseClient';
 import { History } from 'lucide-react';
 
 export default function CalculadoraTool() {
+  const { membership } = useMembership();
+  const planName = membership?.expand?.plan?.name;
   const [f, setF] = useState({
     meters: 5, widthM: 0.6, materialPerM: 45, inkPerM: 35, laborPerM: 25, wastePct: 10, marginPct: 40, qty: 1,
   });
   const [jobs, setJobs] = useState([]);
+  const [limit, setLimit] = useState(null);
+  const [err, setErr] = useState('');
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: +e.target.value }));
 
   const loadJobs = () => pb.collection('tool_jobs').getList(1, 6, { filter: pb.filter('tool = {:t}', { t: 'calculadora' }), sort: '-created' }).then((r) => setJobs(r.items)).catch(() => {});
-  useEffect(() => { loadJobs(); }, []);
+  useEffect(() => { loadJobs(); checkLimit('calculadora', planName).then(setLimit); /* eslint-disable-next-line */ }, [planName]);
 
   const totalMeters = f.meters * f.qty;
   const base = (f.materialPerM + f.inkPerM + f.laborPerM) * totalMeters;
@@ -24,6 +29,10 @@ export default function CalculadoraTool() {
   const perM = totalMeters ? price / totalMeters : 0;
 
   const save = async () => {
+    setErr('');
+    const chk = await checkLimit('calculadora', planName);
+    setLimit(chk);
+    if (!chk.allowed) { setErr(chk.reason || 'Alcanzaste el límite mensual de tu plan para esta herramienta.'); return; }
     await recordJob({ tool: 'calculadora', title: `Cotización ${totalMeters.toFixed(2)}m`, status: 'done', params: f, result: { cost, price, perM } });
     await logUsage('calculadora', 'calc', {});
     loadJobs();
@@ -44,7 +53,11 @@ export default function CalculadoraTool() {
 
   const sidebar = (
     <div className="space-y-6">
-      <button onClick={save} className="nx-btn-primary w-full py-3">Guardar cotización</button>
+      <button onClick={save} disabled={limit && !limit.allowed} className="nx-btn-primary w-full py-3 disabled:opacity-40">Guardar cotización</button>
+      {err && <div className="text-[#FF2D95] text-xs">{err}</div>}
+      {limit && limit.remaining >= 0 && (
+        <div className="text-[11px] text-white/40 text-center">{limit.remaining} usos restantes este mes{limit.max ? ` de ${limit.max}` : ''}</div>
+      )}
       {jobs.length > 0 && (
         <div className="pt-4 border-t border-white/10">
           <div className="font-display uppercase tracking-widest text-xs text-white/60 flex items-center gap-2"><History size={13}/>Historial</div>

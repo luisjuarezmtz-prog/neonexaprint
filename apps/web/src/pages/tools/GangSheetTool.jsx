@@ -1,13 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ToolShell, { labelCls, inputCls, rangeCls } from '@/components/ToolShell';
 import Dropzone from '@/components/tools/Dropzone';
-import { loadImageFromFile, recordJob, logUsage, logError, downloadDataURL, makeThumb, dataUrlToBlob, getJobResultUrl } from '@/lib/tools';
+import { loadImageFromFile, recordJob, logUsage, logError, checkLimit, downloadDataURL, makeThumb, dataUrlToBlob, getJobResultUrl } from '@/lib/tools';
+import { useMembership } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { History, X, Loader2, Download } from 'lucide-react';
 
 const DPI = 150;
 
 export default function GangSheetTool() {
+  const { membership } = useMembership();
+  const planName = membership?.expand?.plan?.name;
   const [items, setItems] = useState([]); // {img, url, name, wCm}
   const [sheetW, setSheetW] = useState(58); // cm imprimible
   const [gap, setGap] = useState(0.5);
@@ -15,10 +18,11 @@ export default function GangSheetTool() {
   const [out, setOut] = useState(null);
   const [err, setErr] = useState('');
   const [jobs, setJobs] = useState([]);
+  const [limit, setLimit] = useState(null);
   const canvasRef = useRef(null);
 
   const loadJobs = () => pb.collection('tool_jobs').getList(1, 6, { filter: pb.filter('tool = {:t}', { t: 'gang-sheet' }), sort: '-created' }).then((r) => setJobs(r.items)).catch(() => {});
-  useEffect(() => { loadJobs(); }, []);
+  useEffect(() => { loadJobs(); checkLimit('gang-sheet', planName).then(setLimit); /* eslint-disable-next-line */ }, [planName]);
 
   const onFiles = async (files) => {
     setErr('');
@@ -34,6 +38,9 @@ export default function GangSheetTool() {
 
   const build = async () => {
     if (items.length === 0) return;
+    const chk = await checkLimit('gang-sheet', planName);
+    setLimit(chk);
+    if (!chk.allowed) { setErr(chk.reason || 'Alcanzaste el límite mensual de tu plan para esta herramienta.'); return; }
     setBusy(true); setErr(''); setOut(null);
     try {
       const px = (cm) => Math.round((cm / 2.54) * DPI);
@@ -80,9 +87,12 @@ export default function GangSheetTool() {
         <span className={labelCls}>Separación (cm)</span>
         <input type="number" step="0.1" value={gap} onChange={(e) => setGap(+e.target.value)} className={inputCls} />
       </label>
-      <button disabled={!items.length || busy} onClick={build} className="nx-btn-primary w-full py-3 disabled:opacity-40">{busy ? 'Acomodando…' : 'Generar Gang Sheet'}</button>
+      <button disabled={!items.length || busy || (limit && !limit.allowed)} onClick={build} className="nx-btn-primary w-full py-3 disabled:opacity-40">{busy ? 'Acomodando…' : 'Generar Gang Sheet'}</button>
       {out && <button onClick={() => downloadDataURL(out.dataUrl, 'gang-sheet.png')} className="nx-btn-ghost w-full py-3 inline-flex items-center justify-center gap-2"><Download size={16}/>Descargar PNG</button>}
       {out && <div className="text-xs text-white/50 text-center">{out.widthCm} × {out.heightCm} cm · {out.count} diseños</div>}
+      {limit && limit.remaining >= 0 && (
+        <div className="text-[11px] text-white/40 mt-3 text-center">{limit.remaining} usos restantes este mes{limit.max ? ` de ${limit.max}` : ''}</div>
+      )}
       {jobs.length > 0 && (
         <div className="pt-4 border-t border-white/10">
           <div className="font-display uppercase tracking-widest text-xs text-white/60 flex items-center gap-2"><History size={13}/>Historial</div>
@@ -110,7 +120,7 @@ export default function GangSheetTool() {
     <ToolShell eyebrow="NEONEXA TOOLS" title="Gang Sheet automático con IA" subtitle="Acomoda tus diseños para aprovechar el ancho y largo imprimible." sidebar={sidebar}>
       <div className="space-y-5">
         <Dropzone multiple onFiles={onFiles} hint="Agrega varios PNG transparentes. Ajusta el ancho de cada uno en cm." />
-        {err && <div className="text-[#FF2D95] text-sm">{err}</div>}
+        {err && <div role="alert" className="text-[#FF2D95] text-sm">{err}</div>}
         {items.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {items.map((it, i) => (

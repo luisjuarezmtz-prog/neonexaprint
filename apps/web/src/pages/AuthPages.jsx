@@ -68,18 +68,20 @@ export function LoginPage() {
               <input className={inputClass + ' mt-2'} type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@correo.com"/>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-widest text-white/60">Contraseña</label>
-              <input className={inputClass + ' mt-2'} type="password" required minLength={8} value={password} onChange={e=>setPassword(e.target.value)}/>
+              <label htmlFor="login-password" className="text-xs uppercase tracking-widest text-white/60">Contraseña</label>
+              <input id="login-password" className={inputClass + ' mt-2'} type="password" required minLength={8} value={password} onChange={e=>setPassword(e.target.value)}
+                aria-invalid={!!err} aria-describedby={err ? 'login-error' : undefined}/>
             </div>
           </>
         ) : (
           <div>
-            <label className="text-xs uppercase tracking-widest text-white/60">Código de verificación</label>
+            <label htmlFor="login-code" className="text-xs uppercase tracking-widest text-white/60">Código de verificación</label>
             <p className="text-white/50 text-xs mt-1 mb-2">Te enviamos un código a {email}. Revisa tu correo.</p>
-            <input className={inputClass} inputMode="numeric" required value={code} onChange={e=>setCode(e.target.value)} placeholder="123456" autoFocus/>
+            <input id="login-code" className={inputClass} inputMode="numeric" required value={code} onChange={e=>setCode(e.target.value)} placeholder="123456" autoFocus
+              aria-invalid={!!err} aria-describedby={err ? 'login-error' : undefined}/>
           </div>
         )}
-        {err && <div className="text-[#FF2D95] text-sm">{err}</div>}
+        {err && <div id="login-error" role="alert" className="text-[#FF2D95] text-sm">{err}</div>}
         <button disabled={loading} className="nx-btn-primary w-full py-3 mt-2 flex items-center justify-center gap-2">
           {loading && <Loader2 className="animate-spin" size={16}/>} {mfa ? 'Verificar código' : 'Entrar'}
         </button>
@@ -129,9 +131,10 @@ export function RegisterPage() {
           <input className={inputClass+' mt-2'} type="tel" required value={f.phone} onChange={set('phone')} placeholder="+52 55 0000 0000"/>
         </div>
         <div>
-          <label className="text-xs uppercase tracking-widest text-white/60">Contraseña segura</label>
-          <input className={inputClass+' mt-2'} type="password" required minLength={8} value={f.password} onChange={set('password')}/>
-          {f.password && !strong && <div className="text-[#FFD400] text-xs mt-1">Usa 8+ caracteres con letras y números.</div>}
+          <label htmlFor="register-password" className="text-xs uppercase tracking-widest text-white/60">Contraseña segura</label>
+          <input id="register-password" className={inputClass+' mt-2'} type="password" required minLength={8} value={f.password} onChange={set('password')}
+            aria-invalid={f.password ? !strong : undefined} aria-describedby={f.password && !strong ? 'register-password-hint' : undefined}/>
+          {f.password && !strong && <div id="register-password-hint" className="text-[#FFD400] text-xs mt-1">Usa 8+ caracteres con letras y números.</div>}
         </div>
         <button type="button" onClick={()=>setShowOpt(s=>!s)} className="text-[#00F0FF] text-xs uppercase tracking-widest">
           {showOpt ? '− Ocultar' : '+ Datos de facturación (opcional)'}
@@ -152,7 +155,7 @@ export function RegisterPage() {
           <input id="register-terms" type="checkbox" checked={terms} onChange={e=>setTerms(e.target.checked)} className="mt-1 accent-[#00AEEF]"/>
           <span>Acepto los <Link to="/terminos" target="_blank" className="text-[#00F0FF]">términos y condiciones</Link> y el <Link to="/privacidad" target="_blank" className="text-[#00F0FF]">aviso de privacidad</Link> de Neonexa.</span>
         </label>
-        {err && <div className="text-[#FF2D95] text-sm">{err}</div>}
+        {err && <div id="register-error" role="alert" className="text-[#FF2D95] text-sm">{err}</div>}
         <button disabled={loading} className="nx-btn-primary w-full py-3 mt-2 flex items-center justify-center gap-2">
           {loading && <Loader2 className="animate-spin" size={16}/>} Crear cuenta
         </button>

@@ -229,7 +229,7 @@ export default function Checkout() {
                 )}
               </div>
             )}
-            {err && <div className="text-[#FF2D95] text-sm mt-3">{err}</div>}
+            {err && <div role="alert" className="text-[#FF2D95] text-sm mt-3">{err}</div>}
             <button disabled={busy || !isVerified} className="nx-btn-primary w-full py-3 mt-5 flex items-center justify-center gap-2 disabled:opacity-50">
               {busy ? <Loader2 className="animate-spin" size={16}/> : <CreditCard size={16}/>} Confirmar y pagar
             </button>
