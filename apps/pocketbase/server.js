@@ -2,10 +2,16 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PB_BINARY = path.join(__dirname, 'pocketbase');
+
+// Cloud Startup wipes this app's own directory on every redeploy, so the
+// database must live outside it (in the account home) to survive deploys.
+const PB_DATA_DIR = path.join(os.homedir(), 'neonexa_pb_data');
+fs.mkdirSync(PB_DATA_DIR, { recursive: true });
 
 const PB_HOST = '127.0.0.1';
 const PB_PORT = 8090;
@@ -29,7 +35,7 @@ function startPocketBase() {
       'serve',
       `--http=${PB_HOST}:${PB_PORT}`,
       '--encryptionEnv=PB_ENCRYPTION_KEY',
-      '--dir=./pb_data',
+      `--dir=${PB_DATA_DIR}`,
       '--migrationsDir=./pb_migrations',
       '--hooksDir=./pb_hooks',
       '--hooksWatch=false',
