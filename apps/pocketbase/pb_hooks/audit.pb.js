@@ -11,7 +11,7 @@
 const AUDITED_COLLECTIONS = [
     "products", "product_variants", "membership_plans",
     "notification_settings", "notification_templates", "tool_limits",
-    "image_packs", "pack_images", "settings", "orders",
+    "image_packs", "pack_images", "settings", "orders", "order_items", "quotes",
 ];
 
 onRecordCreateRequest((e) => {

@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useMembership, isMembershipActive } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
-import { Package, FileImage, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star } from 'lucide-react';
+import { Package, FileImage, FileText, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star } from 'lucide-react';
 import { toolBySlug } from '@/lib/tools';
 
 export const STATUS_META = {
@@ -22,6 +22,14 @@ export const STATUS_META = {
 export const PAY_META = {
   pendiente: '#FFD400', pagado: '#3ddc84', fallido: '#FF2D95', reembolsado: '#00F0FF',
 };
+export const QUOTE_STATUS_META = {
+  nueva: { label: 'Nueva', color: '#00AEEF' },
+  en_revision: { label: 'En revisión', color: '#00F0FF' },
+  cotizada: { label: 'Cotizada', color: '#FFD400' },
+  aceptada: { label: 'Aceptada', color: '#3ddc84' },
+  rechazada: { label: 'Rechazada', color: '#FF2D95' },
+  expirada: { label: 'Expirada', color: '#888' },
+};
 
 const WHATSAPP_NUMBER = '56110050049';
 const WHATSAPP_DISPLAY = '+56 1105 0049';
@@ -32,6 +40,7 @@ export default function Dashboard() {
   const { membership } = useMembership();
   const [tab, setTab] = useState('pedidos');
   const [orders, setOrders] = useState([]);
+  const [quotes, setQuotes] = useState([]);
   const [files, setFiles] = useState([]);
   const [designs, setDesigns] = useState([]);
   const [notifs, setNotifs] = useState([]);
@@ -43,14 +52,15 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isAuthed) return;
     Promise.all([
-      pb.collection('orders').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('orders').getFullList({ sort: '-created', expand: 'order_items_via_order' }).catch(() => []),
+      pb.collection('quotes').getFullList({ sort: '-created', expand: 'product' }).catch(() => []),
       pb.collection('files').getFullList({ sort: '-created', expand: 'order' }).catch(() => []),
       pb.collection('designs').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('notifications').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('membership_history').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('tool_jobs').getFullList({ sort: '-created' }).catch(() => []),
       pb.collection('pack_purchases').getFullList({ filter: 'payment_status = "pagado"', sort: '-created', expand: 'pack' }).catch(() => []),
-    ]).then(([o, fl, d, n, h, tj, pp]) => { setOrders(o); setFiles(fl); setDesigns(d); setNotifs(n); setHistory(h); setToolJobs(tj); setPackPurchases(pp); }).finally(() => setLoading(false));
+    ]).then(([o, q, fl, d, n, h, tj, pp]) => { setOrders(o); setQuotes(q); setFiles(fl); setDesigns(d); setNotifs(n); setHistory(h); setToolJobs(tj); setPackPurchases(pp); }).finally(() => setLoading(false));
   }, [isAuthed]);
 
   const markRead = async (n) => {
@@ -63,6 +73,7 @@ export default function Dashboard() {
 
   const tabs = [
     { id: 'pedidos', label: 'Pedidos', icon: Package },
+    { id: 'cotizaciones', label: `Cotizaciones${quotes.length ? ` (${quotes.length})` : ''}`, icon: FileText },
     { id: 'notificaciones', label: `Notificaciones${unread ? ` (${unread})` : ''}`, icon: Bell },
     { id: 'membresia', label: 'Membresía', icon: Crown },
     { id: 'packs', label: 'Mis Packs', icon: Images },
@@ -103,6 +114,7 @@ export default function Dashboard() {
         ) : (
           <div className="mt-8">
             {tab === 'pedidos' && <Orders orders={orders} designs={designs}/>}
+            {tab === 'cotizaciones' && <Cotizaciones quotes={quotes}/>}
             {tab === 'notificaciones' && <Notifs notifs={notifs} markRead={markRead}/>}
             {tab === 'membresia' && <Membresia membership={membership} history={history}/>}
             {tab === 'packs' && <MisPacks purchases={packPurchases}/>}
@@ -153,8 +165,8 @@ function Orders({ orders, designs }) {
               </div>
             </div>
             <div className="mt-4 grid sm:grid-cols-2 gap-2 text-sm text-white/60">
-              {(o.items || []).map((it, i) => (
-                <div key={i} className="flex items-center gap-2"><ChevronRight size={12} className="text-[#00AEEF]"/>{it.title}</div>
+              {(o.expand?.order_items_via_order || []).map((it) => (
+                <div key={it.id} className="flex items-center gap-2"><ChevronRight size={12} className="text-[#00AEEF]"/>{it.title}</div>
               ))}
             </div>
             {(o.events || []).length > 0 && (
@@ -164,6 +176,41 @@ function Orders({ orders, designs }) {
                 ))}
               </div>
             )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Cotizaciones({ quotes }) {
+  if (quotes.length === 0) {
+    return (
+      <div className="nx-card p-16 text-center">
+        <div className="font-display text-2xl uppercase">Sin solicitudes de cotización</div>
+        <p className="text-white/60 mt-2">Los kits corporativos y proyectos especiales se cotizan a la medida.</p>
+        <div className="mt-6"><Link to="/personalizados" className="nx-btn-primary px-5 py-3">Ver catálogo</Link></div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      {quotes.map(q => {
+        const meta = QUOTE_STATUS_META[q.status] || QUOTE_STATUS_META.nueva;
+        return (
+          <div key={q.id} className="nx-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-display text-lg">{q.folio}</div>
+                <div className="text-xs text-white/40">{q.expand?.product?.name || 'Producto'} · {new Date(q.created).toLocaleString('es-MX')}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs px-3 py-1 rounded-full font-display uppercase tracking-widest" style={{ color: meta.color, background: meta.color + '18' }}>{meta.label}</span>
+                {q.quoted_amount != null && <span className="font-display font-black text-[#00AEEF]">{money(q.quoted_amount)}</span>}
+              </div>
+            </div>
+            <div className="mt-3 text-sm text-white/60">Cantidad estimada: {q.qty}{q.company ? ` · ${q.company}` : ''}</div>
+            {q.quoted_notes && <div className="mt-2 text-sm text-white/50">{q.quoted_notes}</div>}
           </div>
         );
       })}

@@ -4,9 +4,9 @@ import PageShell from '@/components/PageShell';
 import { useAuth } from '@/lib/auth';
 import pb from '@/lib/pocketbaseClient';
 import { money, invalidateSetting } from '@/lib/neonexa';
-import { STATUS_META, PAY_META } from '@/pages/Dashboard';
+import { STATUS_META, PAY_META, QUOTE_STATUS_META } from '@/pages/Dashboard';
 import { CATEGORIES } from '@/pages/Personalizados';
-import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images, ScrollText, FileText } from 'lucide-react';
 import { TOOLS } from '@/lib/tools';
 import { PACK_CATEGORIES } from '@/pages/Packs';
 
@@ -14,8 +14,8 @@ const STATUSES = Object.keys(STATUS_META);
 const PAYS = ['pendiente', 'pagado', 'fallido', 'reembolsado'];
 
 const TABS_BY_ROLE = {
-  admin: ['resumen', 'pedidos', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'packs', 'clientes', 'bitacora'],
-  ventas: ['resumen', 'pedidos', 'clientes'],
+  admin: ['resumen', 'pedidos', 'cotizaciones', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'packs', 'clientes', 'bitacora'],
+  ventas: ['resumen', 'pedidos', 'cotizaciones', 'clientes'],
   operador: ['pedidos'],
 };
 
@@ -25,14 +25,16 @@ export default function Admin() {
   const allowedTabs = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [quotes, setQuotes] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
     Promise.all([
-      pb.collection('orders').getFullList({ sort: '-created' }).catch(() => []),
+      pb.collection('orders').getFullList({ sort: '-created', expand: 'order_items_via_order' }).catch(() => []),
+      pb.collection('quotes').getFullList({ sort: '-created', expand: 'product,file' }).catch(() => []),
       pb.collection('users').getFullList({ sort: '-created' }).catch(() => []),
-    ]).then(([o, u]) => { setOrders(o); setUsers(u); }).finally(() => setLoading(false));
+    ]).then(([o, q, u]) => { setOrders(o); setQuotes(q); setUsers(u); }).finally(() => setLoading(false));
   };
   useEffect(() => { if (isAuthed && isStaff) load(); }, [isAuthed, isStaff]);
   useEffect(() => { if (!tab && allowedTabs.length) setTab(allowedTabs[0]); }, [allowedTabs, tab]);
@@ -43,6 +45,7 @@ export default function Admin() {
   const allTabs = [
     { id: 'resumen', label: 'Resumen', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos', icon: Package },
+    { id: 'cotizaciones', label: 'Cotizaciones', icon: FileText },
     { id: 'productos', label: 'Productos', icon: ShoppingBag },
     { id: 'membresias', label: 'Membresías', icon: Crown },
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
@@ -76,6 +79,7 @@ export default function Admin() {
           <div className="mt-8">
             {tab === 'resumen' && <Resumen orders={orders} users={users}/>}
             {tab === 'pedidos' && <Pedidos orders={orders} reload={load}/>}
+            {tab === 'cotizaciones' && <Cotizaciones quotes={quotes} reload={load}/>}
             {tab === 'productos' && <ProductosAdmin/>}
             {tab === 'membresias' && <MembresiasAdmin/>}
             {tab === 'notificaciones' && <NotificacionesAdmin/>}
@@ -169,7 +173,7 @@ function Pedidos({ orders, reload }) {
               <span className="font-display font-black text-[#00AEEF]">{money(o.totals?.total, o.totals?.currency || 'MXN')}</span>
             </div>
           </div>
-          <div className="mt-3 text-sm text-white/50">{(o.items || []).map(i => i.title).join(' · ')}</div>
+          <div className="mt-3 text-sm text-white/50">{(o.expand?.order_items_via_order || []).map(i => i.title).join(' · ')}</div>
           <div className="mt-4 flex flex-wrap gap-4">
             <label className="text-xs">
               <span className="uppercase tracking-widest text-white/50 block mb-1">Estado</span>
@@ -207,6 +211,89 @@ function Pedidos({ orders, reload }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+const QUOTE_STATUSES = Object.keys(QUOTE_STATUS_META);
+
+function Cotizaciones({ quotes, reload }) {
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(null);
+  const [drafts, setDrafts] = useState({});
+
+  const draft = (q) => drafts[q.id] || { quoted_amount: q.quoted_amount ?? '', quoted_notes: q.quoted_notes || '' };
+  const setDraft = (q, patch) => setDrafts(d => ({ ...d, [q.id]: { ...draft(q), ...patch } }));
+
+  const updateStatus = async (q, status) => {
+    setSaving(q.id);
+    try {
+      const by = user?.name || user?.email || 'staff';
+      const events = [...(q.events || []), { status, at: new Date().toISOString(), note: 'Actualizado por staff', by }];
+      await pb.collection('quotes').update(q.id, { status, events });
+      reload();
+    } catch { /* ignore */ } finally { setSaving(null); }
+  };
+
+  const saveQuote = async (q) => {
+    setSaving(q.id);
+    try {
+      const d = draft(q);
+      await pb.collection('quotes').update(q.id, {
+        quoted_amount: d.quoted_amount === '' ? null : +d.quoted_amount,
+        quoted_notes: d.quoted_notes,
+      });
+      reload();
+    } catch { /* ignore */ } finally { setSaving(null); }
+  };
+
+  const openFile = async (f) => {
+    try {
+      const token = await pb.files.getToken();
+      window.open(pb.files.getUrl(f, f.asset, { token }), '_blank');
+    } catch { /* ignore */ }
+  };
+
+  if (quotes.length === 0) return <div className="nx-card p-16 text-center text-white/60">No hay solicitudes de cotización.</div>;
+  return (
+    <div className="space-y-4">
+      {quotes.map(q => {
+        const d = draft(q);
+        return (
+          <div key={q.id} className="nx-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-display text-lg">{q.folio} · {q.expand?.product?.name || 'Producto'}</div>
+                <div className="text-xs text-white/40">{q.contact?.name} · {q.contact?.email} · {new Date(q.created).toLocaleDateString('es-MX')}</div>
+              </div>
+              {saving === q.id && <Loader2 className="animate-spin text-[#00AEEF]" size={16}/>}
+            </div>
+            <div className="mt-3 text-sm text-white/60 space-y-1">
+              <div>Cantidad estimada: {q.qty}{q.company ? ` · Empresa: ${q.company}` : ''}{q.budget ? ` · Presupuesto: ${money(q.budget)}` : ''}</div>
+              {q.wanted && <div>Productos deseados: {q.wanted}</div>}
+              {q.instructions && <div>Instrucciones: {q.instructions}</div>}
+              {q.expand?.file && <button onClick={() => openFile(q.expand.file)} className="text-[#00F0FF] underline">Ver archivo adjunto</button>}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-4 items-end">
+              <label className="text-xs">
+                <span className="uppercase tracking-widest text-white/50 block mb-1">Estado</span>
+                <select value={q.status} onChange={e => updateStatus(q, e.target.value)} className={sel} style={{ color: QUOTE_STATUS_META[q.status]?.color }}>
+                  {QUOTE_STATUSES.map(s => <option key={s} value={s}>{QUOTE_STATUS_META[s].label}</option>)}
+                </select>
+              </label>
+              <label className="text-xs">
+                <span className="uppercase tracking-widest text-white/50 block mb-1">Monto cotizado</span>
+                <input type="number" min="0" value={d.quoted_amount} onChange={e => setDraft(q, { quoted_amount: e.target.value })} className={sel + ' w-32'}/>
+              </label>
+              <label className="text-xs flex-1 min-w-[200px]">
+                <span className="uppercase tracking-widest text-white/50 block mb-1">Notas de la cotización</span>
+                <input value={d.quoted_notes} onChange={e => setDraft(q, { quoted_notes: e.target.value })} className={sel + ' w-full'}/>
+              </label>
+              <button onClick={() => saveQuote(q)} className="nx-btn-ghost px-4 py-1.5 text-xs">Guardar</button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

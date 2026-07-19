@@ -10,6 +10,28 @@ import { Loader2, CreditCard } from 'lucide-react';
 
 const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
 
+// Cart items arrive in incompatible shapes depending on which flow added them
+// (DTF Textil/UV use service/config/fileId/thumb/unitLabel; Personalizados
+// uses type/meta) — normalize to the order_items schema before persisting.
+function toOrderItem(orderId, it) {
+  const meta = it.meta || {};
+  const config = it.config || meta;
+  return {
+    order: orderId,
+    service: it.service || 'producto',
+    title: it.title,
+    product: meta.productId || null,
+    variant: meta.variantId || null,
+    file: it.fileId || null,
+    thumb: it.thumb || '',
+    config,
+    qty: config.qty ?? 1,
+    subtotal: it.subtotal ?? 0,
+    unit_label: it.unitLabel || '',
+    currency: it.currency || 'MXN',
+  };
+}
+
 export default function Checkout() {
   const { items, subtotal, clear } = useCart();
   const { user, isAuthed } = useAuth();
@@ -67,7 +89,6 @@ export default function Checkout() {
         folio,
         status: 'recibido',
         payment_status: 'pendiente',
-        items: items.map(({ id, ...rest }) => rest),
         totals: { subtotal, iva: +(subtotal * 0.16).toFixed(2), total: +total.toFixed(2), currency: cur },
         contact: { name: f.name, email: f.email, phone: f.phone },
         shipping: { street: f.street, city: f.city, state: f.state, zip: f.zip },
@@ -75,6 +96,7 @@ export default function Checkout() {
         events: [{ status: 'recibido', at: new Date().toISOString(), note: 'Pedido creado por el cliente' }],
         owner: pb.authStore.record.id,
       });
+      await Promise.all(items.map(it => pb.collection('order_items').create(toOrderItem(order.id, it))));
       await pb.collection('payments').create({
         order: order.id,
         amount: amountDue,

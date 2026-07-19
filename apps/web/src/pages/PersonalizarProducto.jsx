@@ -25,6 +25,7 @@ export default function PersonalizarProducto() {
   const [variantId, setVariantId] = useState('');
   const [qty, setQty] = useState(1);
   const [designMode, setDesignMode] = useState('upload'); // upload | help
+  const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
   const [instructions, setInstructions] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -62,12 +63,29 @@ export default function PersonalizarProducto() {
     return `${bits.join(' · ')} ×${qty}`;
   };
 
-  const addToCart = () => {
+  const uploadDesignFile = async () => {
+    if (designMode !== 'upload' || !file) return null;
+    try {
+      const fd = new FormData();
+      fd.append('name', file.name);
+      fd.append('kind', 'original');
+      fd.append('asset', file);
+      fd.append('owner', pb.authStore.record.id);
+      const rec = await pb.collection('files').create(fd);
+      return rec.id;
+    } catch { return null; }
+  };
+
+  const addToCart = async () => {
     if (!approved) { alert('Por favor aprueba la propuesta/mockup antes de continuar.'); return; }
+    const fileId = await uploadDesignFile();
     add({
-      type: 'personalizado', title: summaryTitle(), subtotal,
+      service: 'producto', type: 'personalizado', title: summaryTitle(), subtotal,
+      fileId,
       meta: {
-        product: product.slug, variant: variant ? { model: variant.model, color: variant.color, size: variant.size } : null,
+        product: product.slug, productId: product.id,
+        variant: variant ? { model: variant.model, color: variant.color, size: variant.size } : null,
+        variantId: variant?.id || null,
         qty, designMode, fileName, instructions, dueDate,
       },
     });
@@ -79,18 +97,19 @@ export default function PersonalizarProducto() {
     if (!isAuthed) { nav('/login'); return; }
     setBusy(true);
     try {
+      const fileId = await uploadDesignFile();
       const folio = makeFolio();
-      await pb.collection('orders').create({
-        folio, status: 'recibido', payment_status: 'pendiente',
-        items: [{ title: `${product.name} (cotización)`, qty, type: 'cotizacion' }],
-        totals: { subtotal: 0, total: 0, currency: 'MXN', quote: true },
+      const rec = await pb.collection('quotes').create({
+        folio, status: 'nueva',
+        product: product.id, variant: variantId || null, qty,
+        company, budget: budget ? +budget : null, wanted, instructions,
+        due_date: dueDate || null, design_mode: designMode, file: fileId,
         contact: { name: user.name || '', email: user.email, phone: user.phone || '' },
-        billing: { company, budget, wanted, instructions, dueDate, designMode, fileName },
         notes: `Solicitud de cotización — ${product.name}. ${instructions}`,
-        events: [{ status: 'recibido', at: new Date().toISOString(), note: 'Solicitud de cotización recibida' }],
+        events: [{ status: 'nueva', at: new Date().toISOString(), note: 'Solicitud de cotización recibida' }],
         owner: user.id,
       });
-      setDone(folio);
+      setDone(rec.folio);
     } catch (err) { alert(err?.message || 'No se pudo enviar la solicitud.'); }
     finally { setBusy(false); }
   };
@@ -138,7 +157,7 @@ export default function PersonalizarProducto() {
                   <label><span className={lbl}>Fecha requerida</span><input type="date" className={inp} value={dueDate} onChange={e => setDueDate(e.target.value)}/></label>
                 </div>
                 <label className="block"><span className={lbl}>Productos deseados</span><textarea rows={2} className={inp} value={wanted} onChange={e => setWanted(e.target.value)} placeholder="Playeras, termos, cajas..."/></label>
-                <DesignBlock designMode={designMode} setDesignMode={setDesignMode} fileName={fileName} setFileName={setFileName}/>
+                <DesignBlock designMode={designMode} setDesignMode={setDesignMode} fileName={fileName} setFile={setFile} setFileName={setFileName}/>
                 <label className="block"><span className={lbl}>Comentarios / instrucciones</span><textarea rows={3} className={inp} value={instructions} onChange={e => setInstructions(e.target.value)}/></label>
                 <button disabled={busy} className="nx-btn-primary w-full px-6 py-3 inline-flex items-center justify-center gap-2"><Send size={16}/>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
                 {!isAuthed && <p className="text-xs text-white/40 text-center">Necesitas <Link to="/login" className="text-[#00F0FF]">iniciar sesión</Link> para enviar tu solicitud.</p>}
@@ -154,7 +173,7 @@ export default function PersonalizarProducto() {
                   </label>
                 )}
                 <label className="block"><span className={lbl}>Cantidad</span><input type="number" min="1" className={inp + ' w-32'} value={qty} onChange={e => setQty(Math.max(1, +e.target.value))}/></label>
-                <DesignBlock designMode={designMode} setDesignMode={setDesignMode} fileName={fileName} setFileName={setFileName}/>
+                <DesignBlock designMode={designMode} setDesignMode={setDesignMode} fileName={fileName} setFile={setFile} setFileName={setFileName}/>
                 <label className="block"><span className={lbl}>Instrucciones</span><textarea rows={2} className={inp} value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Colores, ubicación del arte, notas..."/></label>
                 <label className="block"><span className={lbl}>Fecha requerida (opcional)</span><input type="date" className={inp + ' w-52'} value={dueDate} onChange={e => setDueDate(e.target.value)}/></label>
 
@@ -167,7 +186,9 @@ export default function PersonalizarProducto() {
                   <span className="text-white/60">Total estimado</span>
                   <span className="font-display text-3xl font-black text-[#00AEEF]">{money(subtotal)}</span>
                 </div>
-                <button onClick={addToCart} className="nx-btn-primary w-full px-6 py-3 inline-flex items-center justify-center gap-2"><ShoppingCart size={16}/>Aprobar y pagar</button>
+                <button disabled={busy} onClick={async () => { setBusy(true); try { await addToCart(); } finally { setBusy(false); } }} className="nx-btn-primary w-full px-6 py-3 inline-flex items-center justify-center gap-2 disabled:opacity-60">
+                  {busy ? <Loader2 size={16} className="animate-spin"/> : <ShoppingCart size={16}/>}{busy ? 'Guardando…' : 'Aprobar y pagar'}
+                </button>
                 <p className="text-xs text-white/40 text-center">En el checkout podrás elegir pagar anticipo (50%) o el total.</p>
               </div>
             )}
@@ -178,7 +199,7 @@ export default function PersonalizarProducto() {
   );
 }
 
-function DesignBlock({ designMode, setDesignMode, fileName, setFileName }) {
+function DesignBlock({ designMode, setDesignMode, fileName, setFile, setFileName }) {
   return (
     <div>
       <span className={lbl}>Diseño</span>
@@ -195,7 +216,7 @@ function DesignBlock({ designMode, setDesignMode, fileName, setFileName }) {
       {designMode === 'upload' && (
         <label className="mt-3 flex items-center gap-3 text-sm text-white/60 cursor-pointer border border-dashed border-[#00AEEF]/30 rounded px-4 py-3 hover:border-[#00F0FF]">
           <Upload size={16}/>{fileName || 'Selecciona tu archivo (PNG, PDF, SVG...)'}
-          <input type="file" className="hidden" onChange={e => setFileName(e.target.files?.[0]?.name || '')}/>
+          <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0] || null; setFile(f); setFileName(f?.name || ''); }}/>
         </label>
       )}
       {designMode === 'help' && <p className="mt-3 text-xs text-white/50">Nuestro equipo creará una propuesta con base en tus instrucciones antes de producir.</p>}
