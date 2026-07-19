@@ -13,7 +13,12 @@ export default function VerifyEmail() {
   useEffect(() => {
     if (!token) { setStatus('error'); return; }
     pb.collection('users').confirmVerification(token)
-      .then(() => setStatus('ok'))
+      .then(async () => {
+        // confirmVerification() doesn't update the cached session record, so
+        // the dashboard/checkout banners would keep nagging an already-verified user.
+        if (pb.authStore.isValid) { try { await pb.collection('users').authRefresh(); } catch { /* ignore */ } }
+        setStatus('ok');
+      })
       .catch(() => setStatus('error'));
   }, [token]);
 
