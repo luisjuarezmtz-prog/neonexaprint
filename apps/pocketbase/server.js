@@ -25,6 +25,39 @@ try {
   console.error('could not chmod pocketbase binary:', err.message);
 }
 
+// Passenger sometimes runs more than one instance of this app at once. Only
+// one may ever run pocketbase (it's a single SQLite-backed process) — the
+// rest must fall back to proxy-only mode against the owner's port 8090.
+const LOCK_PATH = path.join(path.dirname(PB_DATA_DIR), 'pb_owner.lock');
+
+function tryAcquireOwnerLock() {
+  try {
+    const fd = fs.openSync(LOCK_PATH, 'wx');
+    fs.writeSync(fd, String(process.pid));
+    fs.closeSync(fd);
+    return true;
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+  }
+
+  // lock already exists — reclaim it if the owner process is dead (stale lock)
+  try {
+    const ownerPid = parseInt(fs.readFileSync(LOCK_PATH, 'utf8').trim(), 10);
+    if (ownerPid) {
+      process.kill(ownerPid, 0); // throws if that pid isn't running
+      return false; // owner is alive, we run as a follower
+    }
+  } catch (err) {
+    if (err.code === 'ESRCH') {
+      fs.unlinkSync(LOCK_PATH);
+      return tryAcquireOwnerLock();
+    }
+  }
+  return false;
+}
+
+const isOwner = tryAcquireOwnerLock();
+
 let currentChild = null;
 let shuttingDown = false;
 
@@ -56,13 +89,20 @@ function startPocketBase() {
   });
 }
 
-startPocketBase();
+if (isOwner) {
+  startPocketBase();
+} else {
+  console.log('Another instance already owns pocketbase; running as proxy-only follower.');
+}
 
 // Passenger stops/replaces this process on redeploy/idle without killing
 // children first, orphaning pocketbase and leaving 8090 bound on next boot.
 function shutdown() {
   shuttingDown = true;
   if (currentChild) currentChild.kill('SIGTERM');
+  if (isOwner) {
+    try { fs.unlinkSync(LOCK_PATH); } catch (_) { /* already gone */ }
+  }
   process.exit(0);
 }
 
