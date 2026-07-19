@@ -19,6 +19,7 @@ export default function DtfTextil() {
   const [qty, setQty] = useState(1);
   const [width, setWidth] = useState(0.58);
   const [notes, setNotes] = useState('');
+  const [approved, setApproved] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function DtfTextil() {
   const cur = cfg.currency || 'MXN';
 
   const addToCart = async () => {
+    if (!approved) { return; }
     setSaving(true);
     let fileId = null;
     try {
@@ -70,7 +72,7 @@ export default function DtfTextil() {
           <div className="space-y-6">
             <div>
               <div className="font-display uppercase tracking-widest text-sm mb-3 text-white/80">1 · Carga y análisis</div>
-              <DtfUploader rules={rules} onReady={setReady}/>
+              <DtfUploader rules={rules} onReady={(r) => { setReady(r); setApproved(false); }}/>
             </div>
 
             <div>
@@ -112,7 +114,13 @@ export default function DtfTextil() {
               ))}
             </div>
             {!ready?.file && <div className="mt-4 text-xs text-[#FFD400]">Sube un archivo para continuar.</div>}
-            <button disabled={!ready?.file || saving} onClick={addToCart}
+            {ready?.file && (
+              <label className="flex items-start gap-3 text-sm text-white/70 cursor-pointer mt-4">
+                <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} className="mt-1 accent-[#00F0FF]"/>
+                <span>Apruebo que el archivo cargado es correcto y autorizo su impresión tal como se muestra.</span>
+              </label>
+            )}
+            <button disabled={!ready?.file || !approved || saving} onClick={addToCart}
               className="nx-btn-primary w-full py-3 mt-5 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
               {saving ? <Loader2 className="animate-spin" size={16}/> : <ShoppingCart size={16}/>} Agregar al carrito
             </button>
