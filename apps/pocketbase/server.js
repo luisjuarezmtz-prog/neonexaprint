@@ -19,12 +19,8 @@ try {
   console.error('could not chmod pocketbase binary:', err.message);
 }
 
-console.log('env check:', JSON.stringify({
-  PORT: process.env.PORT || '(unset)',
-  PB_ENCRYPTION_KEY: process.env.PB_ENCRYPTION_KEY ? 'set' : '(unset)',
-  PB_SUPERUSER_EMAIL: process.env.PB_SUPERUSER_EMAIL ? 'set' : '(unset)',
-  PB_SUPERUSER_PASSWORD: process.env.PB_SUPERUSER_PASSWORD ? 'set' : '(unset)',
-}));
+let currentChild = null;
+let shuttingDown = false;
 
 function startPocketBase() {
   const pb = spawn(
@@ -41,7 +37,10 @@ function startPocketBase() {
     { cwd: __dirname, stdio: 'inherit' }
   );
 
+  currentChild = pb;
+
   pb.on('exit', (code) => {
+    if (shuttingDown) return;
     console.error(`pocketbase exited with code ${code}, restarting in 3s...`);
     setTimeout(startPocketBase, 3000);
   });
@@ -52,6 +51,17 @@ function startPocketBase() {
 }
 
 startPocketBase();
+
+// Passenger stops/replaces this process on redeploy/idle without killing
+// children first, orphaning pocketbase and leaving 8090 bound on next boot.
+function shutdown() {
+  shuttingDown = true;
+  if (currentChild) currentChild.kill('SIGTERM');
+  process.exit(0);
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 // Plain Node http proxy — no external dependency, since this host's deploy
 // step strips node_modules regardless of what's committed to git.
