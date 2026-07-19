@@ -70,7 +70,8 @@ routerAdd("POST", "/api/mp/preference", (e) => {
         throw new BadRequestError("No se pudo iniciar el pago con Mercado Pago.");
     }
 
-    payment.set("meta", Object.assign({}, payment.get("meta"), { mp_preference_id: res.json.id }));
+    const prefMeta = Object.assign({}, payment.get("meta") || {}, { mp_preference_id: res.json.id });
+    payment.set("meta", JSON.parse(JSON.stringify(prefMeta)));
     $app.save(payment);
 
     return e.json(200, { init_point: res.json.init_point || res.json.sandbox_init_point });
@@ -135,22 +136,24 @@ routerAdd("POST", "/api/mp/webhook", (e) => {
 
     payment.set("status", mapped);
     payment.set("reference", String(mpPayment.id));
-    payment.set("meta", Object.assign({}, payment.get("meta"), {
+    const paymentMeta = Object.assign({}, payment.get("meta") || {}, {
         mp_payment_id: mpPayment.id,
         mp_status: mpPayment.status,
         mp_status_detail: mpPayment.status_detail,
-    }));
+    });
+    payment.set("meta", JSON.parse(JSON.stringify(paymentMeta)));
     $app.save(payment);
 
     order.set("payment_status", mapped);
-    const events = order.get("events") || [];
+    const existingEvents = order.get("events");
+    const events = Array.isArray(existingEvents) ? existingEvents.slice() : [];
     events.push({
         status: order.get("status"),
         payment_status: mapped,
         at: new Date().toISOString(),
         note: `Webhook Mercado Pago: ${mpPayment.status}`,
     });
-    order.set("events", events);
+    order.set("events", JSON.parse(JSON.stringify(events)));
     $app.save(order); // notifications.pb.js reacts to payment_status changes automatically
 
     return e.json(200, { ok: true });
