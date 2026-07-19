@@ -1,6 +1,6 @@
 import React from 'react';
 
-const WHATSAPP_NUMBER = '56110050049';
+const WHATSAPP_NUMBER = '5611050049';
 const DISPLAY_NUMBER = '+56 1105 0049';
 const DEFAULT_MESSAGE = 'Hola Neonexa, me gustaría cotizar un pedido.';
 

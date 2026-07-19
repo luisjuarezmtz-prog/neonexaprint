@@ -31,7 +31,7 @@ export const QUOTE_STATUS_META = {
   expirada: { label: 'Expirada', color: '#888' },
 };
 
-const WHATSAPP_NUMBER = '56110050049';
+const WHATSAPP_NUMBER = '5611050049';
 const WHATSAPP_DISPLAY = '+56 1105 0049';
 const WHATSAPP = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hola Neonexa, necesito ayuda con mi cuenta.')}`;
 
