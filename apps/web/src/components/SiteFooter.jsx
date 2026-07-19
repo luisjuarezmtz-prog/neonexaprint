@@ -37,8 +37,8 @@ export default function SiteFooter() {
           <div>
             <div className="font-display tracking-[0.22em] text-xs text-[#00AEEF] mb-3">CONTACTO</div>
             <ul className="space-y-2 text-white/70">
-              <li>hola@neonexaprint.mx</li>
-              <li>+52 55 5555 5555</li>
+              <li><a href="mailto:contacto@neonexaprint.com.mx" className="hover:text-[#00F0FF]">contacto@neonexaprint.com.mx</a></li>
+              <li><a href="https://wa.me/5611050049" target="_blank" rel="noopener noreferrer" className="hover:text-[#00F0FF]">+56 1105 0049</a></li>
               <li>CDMX · Área Metropolitana</li>
             </ul>
           </div>
