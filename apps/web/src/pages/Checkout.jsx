@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, Link } from 'react-router-dom';
 import PageShell from '@/components/PageShell';
 import { useCart } from '@/lib/cart';
 import { useAuth } from '@/lib/auth';
@@ -213,9 +213,9 @@ export default function Checkout() {
               ))}
             </div>
             <div className="flex justify-between items-center mt-3"><span className="text-white/60 text-sm">A pagar ahora</span><span className="font-display text-xl font-black text-[#00F0FF]">{money(amountDue, cur)}</span></div>
-            <label className="flex items-start gap-2 text-sm text-white/70 mt-5 cursor-pointer">
-              <input type="checkbox" checked={f.terms} onChange={set('terms')} className="mt-1 accent-[#00AEEF]"/>
-              <span>Acepto términos, condiciones y política de producción.</span>
+            <label htmlFor="checkout-terms" className="flex items-start gap-2 text-sm text-white/70 mt-5 cursor-pointer">
+              <input id="checkout-terms" type="checkbox" checked={f.terms} onChange={set('terms')} className="mt-1 accent-[#00AEEF]"/>
+              <span>Acepto los <Link to="/terminos" target="_blank" className="text-[#00F0FF]">términos, condiciones</Link> y la política de producción.</span>
             </label>
             {!isVerified && (
               <div className="mt-4 p-3 rounded border border-[#FFD400]/40 bg-[#FFD400]/5 text-xs text-white/70">

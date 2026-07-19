@@ -43,9 +43,12 @@ export default function SiteFooter() {
             </ul>
           </div>
         </div>
-        <div className="max-w-[90rem] mx-auto px-6 py-5 border-t border-white/5 text-xs text-white/40 flex flex-wrap gap-2 justify-between">
+        <div className="max-w-[90rem] mx-auto px-6 py-5 border-t border-white/5 text-xs text-white/40 flex flex-wrap gap-4 justify-between items-center">
           <span>© {new Date().getFullYear()} Neonexa Print. Color que vende.</span>
-          <span>Exo 2 · #00AEEF · #00F0FF · #FF2D95 · #FFD400</span>
+          <div className="flex gap-4">
+            <Link to="/terminos" className="hover:text-white/70">Términos y condiciones</Link>
+            <Link to="/privacidad" className="hover:text-white/70">Aviso de privacidad</Link>
+          </div>
         </div>
       </div>
     </footer>

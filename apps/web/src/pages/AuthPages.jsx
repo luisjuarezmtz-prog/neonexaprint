@@ -118,9 +118,9 @@ export function RegisterPage() {
             </div>
           </div>
         )}
-        <label className="flex items-start gap-3 text-sm text-white/70 cursor-pointer">
-          <input type="checkbox" checked={terms} onChange={e=>setTerms(e.target.checked)} className="mt-1 accent-[#00AEEF]"/>
-          <span>Acepto los <span className="text-[#00F0FF]">términos y condiciones</span> y el aviso de privacidad de Neonexa.</span>
+        <label htmlFor="register-terms" className="flex items-start gap-3 text-sm text-white/70 cursor-pointer">
+          <input id="register-terms" type="checkbox" checked={terms} onChange={e=>setTerms(e.target.checked)} className="mt-1 accent-[#00AEEF]"/>
+          <span>Acepto los <Link to="/terminos" target="_blank" className="text-[#00F0FF]">términos y condiciones</Link> y el <Link to="/privacidad" target="_blank" className="text-[#00F0FF]">aviso de privacidad</Link> de Neonexa.</span>
         </label>
         {err && <div className="text-[#FF2D95] text-sm">{err}</div>}
         <button disabled={loading} className="nx-btn-primary w-full py-3 mt-2 flex items-center justify-center gap-2">
