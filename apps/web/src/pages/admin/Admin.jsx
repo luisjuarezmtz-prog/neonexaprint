@@ -6,7 +6,7 @@ import pb from '@/lib/pocketbaseClient';
 import { money, invalidateSetting } from '@/lib/neonexa';
 import { STATUS_META, PAY_META } from '@/pages/Dashboard';
 import { CATEGORIES } from '@/pages/Personalizados';
-import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images } from 'lucide-react';
+import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images, ScrollText } from 'lucide-react';
 import { TOOLS } from '@/lib/tools';
 import { PACK_CATEGORIES } from '@/pages/Packs';
 
@@ -14,7 +14,7 @@ const STATUSES = Object.keys(STATUS_META);
 const PAYS = ['pendiente', 'pagado', 'fallido', 'reembolsado'];
 
 const TABS_BY_ROLE = {
-  admin: ['resumen', 'pedidos', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'packs', 'clientes'],
+  admin: ['resumen', 'pedidos', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'packs', 'clientes', 'bitacora'],
   ventas: ['resumen', 'pedidos', 'clientes'],
   operador: ['pedidos'],
 };
@@ -50,6 +50,7 @@ export default function Admin() {
     { id: 'tools', label: 'Tools / Límites', icon: Wrench },
     { id: 'packs', label: 'Packs', icon: Images },
     { id: 'clientes', label: 'Clientes', icon: Users },
+    { id: 'bitacora', label: 'Bitácora', icon: ScrollText },
   ];
   const tabs = allTabs.filter(t => allowedTabs.includes(t.id));
 
@@ -82,6 +83,7 @@ export default function Admin() {
             {tab === 'tools' && <ToolLimitsAdmin/>}
             {tab === 'packs' && <PacksAdmin/>}
             {tab === 'clientes' && <Clientes users={users}/>}
+            {tab === 'bitacora' && <Bitacora/>}
           </div>
         )}
       </div>
@@ -682,6 +684,67 @@ function PackImagesAdmin({ pack, onBack }) {
           {images.length === 0 && <div className="col-span-full text-center text-white/50 py-10">Sin imágenes en este pack todavía.</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+const ACTION_COLOR = { create: '#3ddc84', update: '#00F0FF', delete: '#FF2D95' };
+
+function Bitacora() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(null);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    pb.collection('audit_logs').getList(1, 100, { sort: '-created' })
+      .then(r => setLogs(r.items)).catch(() => setLogs([])).finally(() => setLoading(false));
+  }, []);
+
+  const filtered = filter ? logs.filter(l => l.collection_name === filter) : logs;
+  const collections = [...new Set(logs.map(l => l.collection_name))];
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]"/></div>;
+  return (
+    <div>
+      <p className="text-white/55 text-sm mb-4">Quién cambió qué en el panel administrativo — productos, precios, membresías, notificaciones, tools, packs y pedidos. Registro de solo lectura, no editable.</p>
+      {collections.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button onClick={() => setFilter('')} className={`px-3 py-1.5 rounded-full text-xs font-display uppercase tracking-widest border ${filter === '' ? 'border-[#00F0FF] text-[#00F0FF]' : 'border-white/15 text-white/60'}`}>Todos</button>
+          {collections.map(c => (
+            <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1.5 rounded-full text-xs font-display uppercase tracking-widest border ${filter === c ? 'border-[#00F0FF] text-[#00F0FF]' : 'border-white/15 text-white/60'}`}>{c}</button>
+          ))}
+        </div>
+      )}
+      <div className="nx-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-white/50 border-b border-white/10 text-xs uppercase tracking-widest">
+            <th className="p-3">Fecha</th><th className="p-3">Quién</th><th className="p-3">Acción</th><th className="p-3">Colección</th><th className="p-3">Detalle</th><th className="p-3"></th>
+          </tr></thead>
+          <tbody>
+            {filtered.map(l => (
+              <React.Fragment key={l.id}>
+                <tr className="border-b border-white/5">
+                  <td className="p-3 text-white/40 whitespace-nowrap">{new Date(l.created).toLocaleString('es-MX')}</td>
+                  <td className="p-3 text-white/70">{l.actor_label}</td>
+                  <td className="p-3"><span className="text-xs px-2 py-1 rounded-full font-display uppercase tracking-widest" style={{ color: ACTION_COLOR[l.action], background: ACTION_COLOR[l.action] + '18' }}>{l.action}</span></td>
+                  <td className="p-3 text-white/70">{l.collection_name}</td>
+                  <td className="p-3 text-white/50">{l.summary}</td>
+                  <td className="p-3 text-right"><button onClick={() => setOpen(open === l.id ? null : l.id)} className="nx-btn-ghost px-3 py-1 text-xs">{open === l.id ? 'Ocultar' : 'Ver cambios'}</button></td>
+                </tr>
+                {open === l.id && (
+                  <tr className="border-b border-white/5 bg-black/30">
+                    <td colSpan={6} className="p-4">
+                      <pre className="text-[11px] text-white/60 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(l.changes, null, 2)}</pre>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+            {filtered.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-white/50">Sin actividad registrada todavía.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
