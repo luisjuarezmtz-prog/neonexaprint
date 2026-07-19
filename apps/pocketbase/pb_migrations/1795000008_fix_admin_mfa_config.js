@@ -1,13 +1,11 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// PocketBase supports native MFA, but it wasn't turned on for admin or
-// superuser accounts, and login alerts were off. This wires the OTP
-// infrastructure (email template, code length/duration) for both `users`
-// (admin role) and `_superusers`, but leaves mfa.enabled = false for now —
-// the OTP code is delivered by email, and SMTP is currently broken
-// (Hostinger auth failing, tracked separately). Flip mfa.enabled to true
-// once real email delivery is confirmed working; no redeploy needed, it's
-// a normal collection update.
+// Corrective follow-up to 1795000007_admin_mfa.js: assigning a whole new
+// object to collection.otp / collection.mfa (like verificationTemplate
+// accepts) is silently ignored by PocketBase's JSVM bindings for these two
+// fields — the previous migration ran but left otp/mfa at their defaults.
+// Mutating the existing nested fields in place (same pattern already used
+// for extending users.role's select values) is what actually persists.
 
 migrate(
   (app) => {
