@@ -34,8 +34,9 @@ routerAdd("POST", "/api/mp/preference", (e) => {
     catch (_) { throw new NotFoundError("Pedido no encontrado."); }
     if (order.get("owner") !== auth.id) throw new ForbiddenError("Este pedido no te pertenece.");
 
-    const payment = $app.findFirstRecordByFilter("payments", "order = {:o}", { o: order.id });
-    if (!payment) throw new NotFoundError("No hay un pago pendiente para este pedido.");
+    let payment;
+    try { payment = $app.findFirstRecordByFilter("payments", "order = {:o}", { o: order.id }); }
+    catch (_) { throw new NotFoundError("No hay un pago pendiente para este pedido."); }
     if (payment.get("status") === "pagado") throw new BadRequestError("Este pedido ya está pagado.");
 
     const totals = order.get("totals") || {};
