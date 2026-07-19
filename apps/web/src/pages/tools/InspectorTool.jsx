@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { inspect } from '@/lib/toolProcessors';
 import { labelCls, inputCls, rangeCls } from '@/components/ToolShell';
 
 export default function InspectorTool() {
@@ -8,7 +7,6 @@ export default function InspectorTool() {
     <ImageToolLayout
       slug="inspector"
       defaultParams={{ printCm: 30, minDpi: 150 }}
-      process={inspect}
       hint="PNG, JPG o WEBP. Analizamos resolución, DPI, transparencia y bordes."
       controls={(p, set) => (
         <>

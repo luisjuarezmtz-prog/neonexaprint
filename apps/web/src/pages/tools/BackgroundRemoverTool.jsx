@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { removeBackground } from '@/lib/toolProcessors';
 import { labelCls, rangeCls } from '@/components/ToolShell';
 
 export default function BackgroundRemoverTool() {
@@ -8,7 +7,6 @@ export default function BackgroundRemoverTool() {
     <ImageToolLayout
       slug="background-remover"
       defaultParams={{ tolerance: 40 }}
-      process={removeBackground}
       hint="Funciona mejor con fondos sólidos. Genera un PNG transparente."
       controls={(p, set) => (
         <label className="block">

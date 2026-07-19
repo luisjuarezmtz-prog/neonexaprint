@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { prepareRip } from '@/lib/toolProcessors';
 import { labelCls, rangeCls, inputCls } from '@/components/ToolShell';
 
 const RIPS = ['Acrorip', 'Maintop', 'CADlink', 'Flexi', 'PrintFactory'];
@@ -10,7 +9,6 @@ export default function RipPreparerTool() {
     <ImageToolLayout
       slug="rip-preparer"
       defaultParams={{ rip: 'Acrorip', choke: 1, mirror: false }}
-      process={prepareRip}
       hint="Genera base de blanco, preajustes y archivo de configuración para tu RIP."
       controls={(p, set) => (
         <>

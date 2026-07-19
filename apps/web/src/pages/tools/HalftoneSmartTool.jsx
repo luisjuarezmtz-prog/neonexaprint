@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { smartHalftone } from '@/lib/toolProcessors';
 import { labelCls, rangeCls } from '@/components/ToolShell';
 
 const GARMENTS = ['#111111', '#ffffff', '#c0392b', '#1f4e8c', '#2e7d32', '#f1c40f', '#7f8c8d'];
@@ -10,7 +9,6 @@ export default function HalftoneSmartTool() {
     <ImageToolLayout
       slug="halftone-smart"
       defaultParams={{ cell: 8, angle: 45, garment: '#111111', lightGarment: false, ink: '#ffffff' }}
-      process={smartHalftone}
       hint="Genera semitonos considerando el color de la prenda y la tinta."
       controls={(p, set) => (
         <>

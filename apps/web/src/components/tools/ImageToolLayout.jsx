@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ToolShell from '@/components/ToolShell';
 import Dropzone from './Dropzone';
 import { useMembership } from '@/lib/membership';
-import { loadImageFromFile, makeThumb, recordJob, logUsage, logError, checkLimit, downloadDataURL, dataUrlToBlob, getJobResultUrl, toolBySlug } from '@/lib/tools';
+import { loadImageFromFile, makeThumb, recordJob, logUsage, logError, checkLimit, downloadDataURL, getJobResultUrl, toolBySlug } from '@/lib/tools';
 import pb from '@/lib/pocketbaseClient';
 import { Loader2, Download, RotateCcw, History, AlertTriangle } from 'lucide-react';
 
 /**
- * Generic image tool workspace.
- * process(img, params, onProgress) => { outputDataUrl?, result?, downloadName?, summary?[] }
+ * Generic image tool workspace. Processing runs in a Web Worker (workers/imageProcessor.worker.js,
+ * dispatched by `slug`) so a heavy per-pixel loop never freezes the page.
  */
-export default function ImageToolLayout({ slug, controls, defaultParams = {}, process, hint, accept = 'image/png,image/jpeg,image/webp' }) {
+export default function ImageToolLayout({ slug, controls, defaultParams = {}, hint, accept = 'image/png,image/jpeg,image/webp' }) {
   const tool = toolBySlug(slug);
   const { membership } = useMembership();
   const [file, setFile] = useState(null);
@@ -19,10 +19,11 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
   const [params, setParams] = useState(defaultParams);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [out, setOut] = useState(null); // { outputDataUrl, result, downloadName, summary }
+  const [out, setOut] = useState(null); // { outputBlob, outUrl, result, downloadName, summary, download? }
   const [err, setErr] = useState('');
   const [limit, setLimit] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const workerRef = useRef(null);
 
   const planName = membership?.expand?.plan?.name;
 
@@ -32,8 +33,11 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
   };
   useEffect(() => { loadJobs(); checkLimit(slug, planName).then(setLimit); /* eslint-disable-next-line */ }, [slug, planName]);
 
+  useEffect(() => () => { workerRef.current?.terminate(); }, []);
+
   const reset = () => {
     if (srcUrl) URL.revokeObjectURL(srcUrl);
+    if (out?.outUrl) URL.revokeObjectURL(out.outUrl);
     setFile(null); setSrcUrl(''); setImg(null); setOut(null); setErr(''); setProgress(0);
   };
 
@@ -45,6 +49,19 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
     } catch (e) { setErr(String(e.message || e)); }
   };
 
+  const runInWorker = (bitmap) => new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('../../workers/imageProcessor.worker.js', import.meta.url), { type: 'module' });
+    workerRef.current = worker;
+    worker.onmessage = (e) => {
+      const { type } = e.data;
+      if (type === 'progress') setProgress(Math.min(99, Math.round(e.data.value)));
+      else if (type === 'done') { worker.terminate(); resolve(e.data.result); }
+      else if (type === 'error') { worker.terminate(); reject(new Error(e.data.message)); }
+    };
+    worker.onerror = (e) => { worker.terminate(); reject(new Error(e.message || 'Error en el procesamiento.')); };
+    worker.postMessage({ tool: slug, bitmap, params }, [bitmap]);
+  });
+
   const run = async () => {
     if (!img) return;
     const chk = await checkLimit(slug, planName);
@@ -52,28 +69,27 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
     if (!chk.allowed) { setErr(chk.reason || 'Alcanzaste el límite mensual de tu plan para esta herramienta.'); return; }
     setBusy(true); setErr(''); setProgress(5); setOut(null);
     try {
-      const result = await process(img, params, (p) => setProgress(Math.min(99, Math.round(p))));
+      const bitmap = await createImageBitmap(file);
+      const result = await runInWorker(bitmap);
       setProgress(100);
-      setOut(result);
+      const outUrl = URL.createObjectURL(result.outputBlob);
+      setOut({ ...result, outUrl });
+
       const thumbIn = makeThumb(img);
       let thumbOut = '';
-      if (result.outputDataUrl) {
-        try {
-          const oimg = new Image(); oimg.src = result.outputDataUrl;
-          await new Promise((r) => { oimg.onload = r; oimg.onerror = r; });
-          thumbOut = makeThumb(oimg);
-        } catch { /* ignore */ }
-      }
+      try {
+        const outBitmap = await createImageBitmap(result.outputBlob);
+        thumbOut = makeThumb(outBitmap);
+        outBitmap.close?.();
+      } catch { /* ignore, e.g. SVG blobs createImageBitmap may not decode in every browser */ }
+
       const downloadName = result.downloadName || `neonexa-${slug}.png`;
-      let resultBlob = null;
-      if (result.outputDataUrl) {
-        try { resultBlob = dataUrlToBlob(result.outputDataUrl); } catch { /* ignore */ }
-      }
+      const deliverable = result.download || { blob: result.outputBlob, name: downloadName };
       await recordJob({
         tool: slug, title: file?.name || tool?.name, status: 'done',
         inputName: file?.name, inputPreview: thumbIn, outputPreview: thumbOut,
         params, result: result.result || {},
-        resultBlob, resultFilename: downloadName,
+        resultBlob: deliverable.blob, resultFilename: deliverable.name,
       });
       await logUsage(slug, 'run', { name: file?.name });
       loadJobs();
@@ -85,10 +101,13 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
   };
 
   const download = () => {
-    if (out?.download) { out.download(); return; }
-    if (out?.outputDataUrl) downloadDataURL(out.outputDataUrl, out.downloadName || `neonexa-${slug}.png`);
+    const deliverable = out?.download || (out?.outputBlob ? { blob: out.outputBlob, name: out.downloadName || `neonexa-${slug}.png` } : null);
+    if (!deliverable) return;
+    const url = URL.createObjectURL(deliverable.blob);
+    downloadDataURL(url, deliverable.name);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const canDownload = out && (out.outputDataUrl || out.download);
+  const canDownload = !!(out?.outputBlob || out?.download);
 
   const sidebar = (
     <div className="space-y-6">
@@ -159,7 +178,7 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
               <figcaption className="text-[11px] uppercase tracking-widest text-white/50 mb-2">Después</figcaption>
               <div className="nx-checker rounded-lg overflow-hidden flex items-center justify-center min-h-[280px]">
                 {busy ? <Loader2 className="animate-spin text-[#00AEEF]" size={40}/>
-                  : out?.outputDataUrl ? <img src={out.outputDataUrl} alt="resultado" className="max-w-full max-h-[420px] object-contain"/>
+                  : out?.outUrl ? <img src={out.outUrl} alt="resultado" className="max-w-full max-h-[420px] object-contain"/>
                   : <span className="text-white/30 text-sm">Pulsa “Procesar”</span>}
               </div>
             </figure>

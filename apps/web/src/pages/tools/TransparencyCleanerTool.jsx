@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { cleanTransparency } from '@/lib/toolProcessors';
 import { labelCls, rangeCls } from '@/components/ToolShell';
 
 export default function TransparencyCleanerTool() {
@@ -8,7 +7,6 @@ export default function TransparencyCleanerTool() {
     <ImageToolLayout
       slug="transparency-cleaner"
       defaultParams={{ alphaThreshold: 60, removeWhite: true, whiteThreshold: 240 }}
-      process={cleanTransparency}
       hint="Elimina píxeles semitransparentes, halos y bordes blancos no deseados."
       controls={(p, set) => (
         <>

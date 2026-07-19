@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { upscale } from '@/lib/toolProcessors';
 import { labelCls, rangeCls } from '@/components/ToolShell';
 
 export default function UpscalerTool() {
@@ -8,7 +7,6 @@ export default function UpscalerTool() {
     <ImageToolLayout
       slug="upscaler"
       defaultParams={{ factor: 2, sharpness: 50 }}
-      process={upscale}
       hint="Aumenta la resolución con reconstrucción y nitidez para DTF."
       controls={(p, set) => (
         <>

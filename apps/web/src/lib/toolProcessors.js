@@ -1,13 +1,32 @@
-import { downloadText } from '@/lib/tools';
+// These functions now run inside a Web Worker (see workers/imageProcessor.worker.js)
+// so heavy per-pixel loops no longer freeze the page — that means no `document`
+// (canvas creation goes through OffscreenCanvas) and no `canvas.toDataURL()`
+// (OffscreenCanvas only has the async convertToBlob) or DOM-touching download
+// triggers (a worker can't create/click an <a> tag). Every function below
+// returns plain data (Blobs, strings, numbers) — the actual download click
+// happens on the main thread in ImageToolLayout, using the `download` field
+// when a tool's real deliverable differs from its visual preview (RIP preset
+// text, halftone's transparent PNG vs. its garment-color preview).
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
+const inWorker = typeof document === 'undefined';
+
+function makeCanvas(w, h) {
+  if (inWorker) return new OffscreenCanvas(w, h);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+function canvasToBlob(canvas, type = 'image/png', quality) {
+  if (canvas.convertToBlob) return canvas.convertToBlob({ type, quality });
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
 
 function drawToCanvas(img, maxDim) {
   const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
   const s = maxDim ? Math.min(1, maxDim / Math.max(w, h)) : 1;
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.round(w * s));
-  c.height = Math.max(1, Math.round(h * s));
+  const c = makeCanvas(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, c.width, c.height);
   return { c, ctx };
@@ -16,7 +35,7 @@ function drawToCanvas(img, maxDim) {
 // ---------- 1. INSPECTOR ----------
 export async function inspect(img, params, onP) {
   onP(20);
-  const w = img.naturalWidth, h = img.naturalHeight;
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
   const { c, ctx } = drawToCanvas(img, 500);
   const data = ctx.getImageData(0, 0, c.width, c.height).data;
   let alpha = false, edgeInk = false, minA = 255;
@@ -40,9 +59,11 @@ export async function inspect(img, params, onP) {
   if (!alpha) risks.push('Sin transparencia: revisa el fondo antes de imprimir DTF.');
   if (edgeInk) risks.push('El diseño toca el borde: agrega margen de seguridad.');
   if (minA > 5 && minA < 250) risks.push('Píxeles semitransparentes: pueden generar halos.');
-  onP(100);
+  onP(95);
   const { c: full } = drawToCanvas(img);
-  return { outputDataUrl: full.toDataURL('image/png'), downloadName: `inspeccion-${img.width}.png`,
+  const outputBlob = await canvasToBlob(full);
+  onP(100);
+  return { outputBlob, downloadName: `inspeccion-${w}.png`,
     result: { dpi, alpha, edgeInk, risks }, summary,
     riskList: risks };
 }
@@ -88,17 +109,18 @@ export async function removeBackground(img, params, onP) {
     if (d[i + 3] > 0 && colorDist([d[i], d[i + 1], d[i + 2]], bg) < tol * 0.6) d[i + 3] = Math.round(d[i + 3] * 0.4);
   }
   ctx.putImageData(id, 0, 0);
+  onP(95);
+  const outputBlob = await canvasToBlob(c);
   onP(100);
-  return { outputDataUrl: c.toDataURL('image/png'), downloadName: 'sin-fondo.png', result: { bg } };
+  return { outputBlob, downloadName: 'sin-fondo.png', result: { bg } };
 }
 
 // ---------- 5. UPSCALER ----------
 export async function upscale(img, params, onP) {
   onP(15);
   const factor = params.factor || 2;
-  const w = img.naturalWidth, h = img.naturalHeight;
-  const c = document.createElement('canvas');
-  c.width = Math.min(6000, w * factor); c.height = Math.min(6000, h * factor);
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  const c = makeCanvas(Math.min(6000, w * factor), Math.min(6000, h * factor));
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, c.width, c.height);
@@ -119,12 +141,14 @@ export async function upscale(img, params, onP) {
           d[i + ch] = Math.max(0, Math.min(255, c0 + (c0 - blur) * k));
         }
       }
-      if (y % 100 === 0) { onP(50 + (y / H) * 45); await tick(); }
+      if (y % 100 === 0) { onP(50 + (y / H) * 40); await tick(); }
     }
     ctx.putImageData(id, 0, 0);
   }
+  onP(95);
+  const outputBlob = await canvasToBlob(c);
   onP(100);
-  return { outputDataUrl: c.toDataURL('image/png'), downloadName: `hd-${c.width}x${c.height}.png`,
+  return { outputBlob, downloadName: `hd-${c.width}x${c.height}.png`,
     result: { size: `${c.width}x${c.height}` },
     summary: [{ label: 'Resolución final', value: `${c.width} × ${c.height} px` }, { label: 'Factor', value: `${factor}×` }] };
 }
@@ -155,13 +179,10 @@ export async function vectorize(img, params, onP) {
     if (y % 40 === 0) { onP(45 + (y / H) * 45); await tick(); }
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" shape-rendering="crispEdges">${rects.join('')}</svg>`;
-  onP(95);
-  const blob = new Blob([svg], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
   onP(100);
+  const outputBlob = new Blob([svg], { type: 'image/svg+xml' });
   return {
-    outputDataUrl: url, downloadName: 'vector.svg', result: { paths: rects.length, colors: levels },
-    download: () => downloadText(svg, 'neonexa-vector.svg', 'image/svg+xml'),
+    outputBlob, downloadName: 'neonexa-vector.svg', result: { paths: rects.length, colors: levels },
     summary: [{ label: 'Colores', value: levels }, { label: 'Segmentos vectoriales', value: rects.length }],
   };
 }
@@ -183,8 +204,10 @@ export async function cleanTransparency(img, params, onP) {
   }
   onP(80);
   ctx.putImageData(id, 0, 0);
+  onP(95);
+  const outputBlob = await canvasToBlob(c);
   onP(100);
-  return { outputDataUrl: c.toDataURL('image/png'), downloadName: 'limpio.png', result: { alphaThreshold: th } };
+  return { outputBlob, downloadName: 'limpio.png', result: { alphaThreshold: th } };
 }
 
 // ---------- 8. SMART HALFTONE ----------
@@ -195,8 +218,7 @@ export async function smartHalftone(img, params, onP) {
   const { c: src, ctx: sctx } = drawToCanvas(img, 1600);
   const W = src.width, H = src.height;
   const sd = sctx.getImageData(0, 0, W, H).data;
-  const out = document.createElement('canvas');
-  out.width = W; out.height = H;
+  const out = makeCanvas(W, H);
   const octx = out.getContext('2d');
   octx.clearRect(0, 0, W, H);
   const dark = params.lightGarment ? false : true; // light ink on dark garment
@@ -218,18 +240,20 @@ export async function smartHalftone(img, params, onP) {
       const r = (cell / 2) * Math.sqrt(Math.max(0, Math.min(1, lum)));
       if (r > 0.3) { octx.beginPath(); octx.arc(x, y, r, 0, Math.PI * 2); octx.fill(); }
     }
-    if ((gy % (cell * 20)) === 0) { onP(30 + ((gy + H) / (H * 3)) * 65); await tick(); }
+    if ((gy % (cell * 20)) === 0) { onP(30 + ((gy + H) / (H * 3)) * 60); await tick(); }
   }
-  onP(100);
+  onP(92);
   // preview over garment color
-  const prev = document.createElement('canvas'); prev.width = W; prev.height = H;
+  const prev = makeCanvas(W, H);
   const pctx = prev.getContext('2d');
   pctx.fillStyle = garment; pctx.fillRect(0, 0, W, H);
   pctx.drawImage(out, 0, 0);
-  return { outputDataUrl: prev.toDataURL('image/png'), downloadName: 'semitono.png',
+  const [outputBlob, transparentBlob] = await Promise.all([canvasToBlob(prev), canvasToBlob(out)]);
+  onP(100);
+  return { outputBlob, downloadName: 'semitono.png',
     result: { cell, ink },
-    // downloadable transparent halftone
-    download: () => { const a = document.createElement('a'); a.href = out.toDataURL('image/png'); a.download = 'neonexa-semitono.png'; a.click(); } };
+    // the real deliverable is the transparent halftone, not the garment-color preview
+    download: { blob: transparentBlob, name: 'neonexa-semitono.png' } };
 }
 
 // ---------- 9. SHIRT SIMULATOR ----------
@@ -237,7 +261,7 @@ export async function shirtSimulate(img, params, onP) {
   onP(20);
   const color = params.color || '#1a1a1a';
   const W = 900, H = 1000;
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const c = makeCanvas(W, H);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#0b0b0b'; ctx.fillRect(0, 0, W, H);
   // simple t-shirt silhouette
@@ -256,8 +280,10 @@ export async function shirtSimulate(img, params, onP) {
   const dw = 320, ratio = (img.naturalHeight || img.height) / (img.naturalWidth || img.width);
   const dh = dw * ratio;
   ctx.drawImage(img, (W - dw) / 2, 360, dw, dh);
+  onP(95);
+  const outputBlob = await canvasToBlob(c);
   onP(100);
-  return { outputDataUrl: c.toDataURL('image/png'), downloadName: 'simulacion.png', result: { color } };
+  return { outputBlob, downloadName: 'simulacion.png', result: { color } };
 }
 
 // ---------- 10. RIP PREPARER ----------
@@ -268,7 +294,7 @@ export async function prepareRip(img, params, onP) {
   const d = id.data;
   const choke = params.choke ?? 1;
   // white underbase = design alpha (optionally choked)
-  const base = document.createElement('canvas'); base.width = c.width; base.height = c.height;
+  const base = makeCanvas(c.width, c.height);
   const bctx = base.getContext('2d');
   const bid = bctx.createImageData(c.width, c.height);
   const bd = bid.data;
@@ -279,13 +305,14 @@ export async function prepareRip(img, params, onP) {
   bctx.putImageData(bid, 0, 0);
   onP(60);
   // composite: white base under design over neutral gray to visualize
-  const prev = document.createElement('canvas'); prev.width = c.width; prev.height = c.height;
+  const prev = makeCanvas(c.width, c.height);
   const pctx = prev.getContext('2d');
   pctx.fillStyle = '#333'; pctx.fillRect(0, 0, c.width, c.height);
   pctx.drawImage(base, 0, 0);
   pctx.drawImage(c, 0, 0);
-  onP(90);
+  onP(85);
   const rip = params.rip || 'Acrorip';
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
   const config = [
     `# Neonexa — Preajuste RIP`,
     `RIP: ${rip}`,
@@ -295,13 +322,14 @@ export async function prepareRip(img, params, onP) {
     `Perfil ICC: DTF_Film_v3`,
     `Velocidad tinta blanca: 100%`,
     `Espejo: ${params.mirror ? 'Sí' : 'No'}`,
-    `Dimensiones: ${img.naturalWidth}x${img.naturalHeight}px`,
+    `Dimensiones: ${w}x${h}px`,
   ].join('\n');
+  const outputBlob = await canvasToBlob(prev);
   onP(100);
   return {
-    outputDataUrl: prev.toDataURL('image/png'), downloadName: 'rip-preview.png',
+    outputBlob, downloadName: 'rip-preview.png',
     result: { rip, choke },
-    download: () => downloadText(config, `neonexa-${rip.toLowerCase()}-preset.txt`),
+    download: { blob: new Blob([config], { type: 'text/plain' }), name: `neonexa-${rip.toLowerCase()}-preset.txt` },
     summary: [{ label: 'Flujo RIP', value: rip }, { label: 'Base de blanco', value: `Choke ${choke}px` }, { label: 'Espejo', value: params.mirror ? 'Sí' : 'No' }],
   };
 }

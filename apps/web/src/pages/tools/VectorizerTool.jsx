@@ -1,6 +1,5 @@
 import React from 'react';
 import ImageToolLayout from '@/components/tools/ImageToolLayout';
-import { vectorize } from '@/lib/toolProcessors';
 import { labelCls, rangeCls } from '@/components/ToolShell';
 
 export default function VectorizerTool() {
@@ -8,7 +7,6 @@ export default function VectorizerTool() {
     <ImageToolLayout
       slug="vectorizer"
       defaultParams={{ colors: 6 }}
-      process={vectorize}
       hint="Convierte tu PNG/JPG a un SVG editable por regiones de color."
       controls={(p, set) => (
         <label className="block">
