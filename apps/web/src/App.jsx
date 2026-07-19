@@ -9,6 +9,7 @@ import Products from './pages/Products';
 import Personalizados from './pages/Personalizados';
 import PersonalizarProducto from './pages/PersonalizarProducto';
 import Membresias from './pages/Membresias';
+import MembresiasRetorno from './pages/MembresiasRetorno';
 import Dashboard from './pages/Dashboard';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
 import VerifyEmail from './pages/VerifyEmail';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/personalizados" element={<Personalizados />} />
             <Route path="/personalizados/:slug" element={<PersonalizarProducto />} />
             <Route path="/membresias" element={<Membresias />} />
+            <Route path="/membresias/retorno" element={<MembresiasRetorno />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verificar" element={<VerifyEmail />} />

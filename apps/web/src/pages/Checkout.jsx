@@ -48,6 +48,9 @@ export default function Checkout() {
   const [payMode, setPayMode] = useState('total');
   const [selectedAddr, setSelectedAddr] = useState(null);
   const [saveAddr, setSaveAddr] = useState(false);
+  const [coupon, setCoupon] = useState('');
+  const [couponInfo, setCouponInfo] = useState(null); // { valid, discount_type, discount_value } | { valid:false, reason }
+  const [couponChecking, setCouponChecking] = useState(false);
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
   useEffect(() => {
@@ -68,8 +71,26 @@ export default function Checkout() {
   if (items.length === 0) return <Navigate to="/cart" replace/>;
 
   const cur = items[0]?.currency || 'MXN';
-  const total = subtotal * 1.16;
+  const preDiscountTotal = subtotal * 1.16;
+  const discount = couponInfo?.valid
+    ? (couponInfo.discount_type === 'percent' ? preDiscountTotal * (couponInfo.discount_value / 100) : couponInfo.discount_value)
+    : 0;
+  const total = Math.max(0, +(preDiscountTotal - discount).toFixed(2));
   const amountDue = payMode === 'anticipo' ? +(total * 0.5).toFixed(2) : +total.toFixed(2);
+
+  const checkCoupon = async () => {
+    const code = coupon.trim();
+    if (!code) { setCouponInfo(null); return; }
+    setCouponChecking(true); setCouponInfo(null);
+    try {
+      const res = await pb.send('/api/coupons/validate', {
+        method: 'POST', body: { code, context: 'order', amount: preDiscountTotal },
+      });
+      setCouponInfo({ valid: true, discount_type: res.discount_type, discount_value: res.discount_value });
+    } catch (ex) {
+      setCouponInfo({ valid: false, reason: ex?.response?.message || ex?.message || 'Cupón no válido.' });
+    } finally { setCouponChecking(false); }
+  };
 
   const resend = async () => {
     setResendState('sending');
@@ -96,7 +117,7 @@ export default function Checkout() {
         folio,
         status: 'recibido',
         payment_status: 'pendiente',
-        totals: { subtotal, iva: +(subtotal * 0.16).toFixed(2), total: +total.toFixed(2), currency: cur },
+        totals: { subtotal, iva: +(subtotal * 0.16).toFixed(2), total: +total.toFixed(2), currency: cur, coupon: couponInfo?.valid ? coupon.trim() : '' },
         contact: { name: f.name, email: f.email, phone: f.phone },
         shipping: { street: f.street, city: f.city, state: f.state, zip: f.zip },
         billing: f.invoice ? { company: f.company, rfc: f.rfc, cfdiUse: f.cfdiUse } : null,
@@ -171,8 +192,19 @@ export default function Checkout() {
               ))}
             </div>
             <div className="border-t border-white/10 my-4"/>
+            <div className="flex flex-wrap items-center gap-2">
+              <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponInfo(null); }} placeholder="Código de cupón"
+                className="flex-1 min-w-0 bg-black/50 border border-[#00AEEF]/30 px-3 py-1.5 rounded text-white text-xs focus:outline-none focus:border-[#00F0FF]"/>
+              <button type="button" onClick={checkCoupon} disabled={couponChecking || !coupon.trim()} className="nx-btn-ghost px-3 py-1.5 text-xs shrink-0">
+                {couponChecking ? '…' : 'Aplicar'}
+              </button>
+            </div>
+            {couponInfo?.valid && <div className="text-xs text-[#3ddc84] mt-1.5">Cupón aplicado</div>}
+            {couponInfo && !couponInfo.valid && <div className="text-xs text-[#FF2D95] mt-1.5">{couponInfo.reason}</div>}
+            <div className="border-t border-white/10 my-4"/>
             <div className="flex justify-between text-sm"><span className="text-white/60">Subtotal</span><span>{money(subtotal, cur)}</span></div>
             <div className="flex justify-between text-sm mt-1"><span className="text-white/60">IVA</span><span>{money(subtotal*0.16, cur)}</span></div>
+            {discount > 0 && <div className="flex justify-between text-sm mt-1"><span className="text-white/60">Descuento</span><span className="text-[#3ddc84]">−{money(discount, cur)}</span></div>}
             <div className="flex justify-between items-center mt-3"><span className="text-white/60">Total</span><span className="font-display text-2xl font-black text-[#00AEEF]">{money(total, cur)}</span></div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {[{ id: 'total', l: 'Pago total' }, { id: 'anticipo', l: 'Anticipo 50%' }].map(m => (

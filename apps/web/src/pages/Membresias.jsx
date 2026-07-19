@@ -4,11 +4,13 @@ import PageShell from '@/components/PageShell';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
 import { useAuth } from '@/lib/auth';
-import { useMembership, isMembershipActive, addPeriod } from '@/lib/membership';
+import { useMembership, isMembershipActive } from '@/lib/membership';
 import { Check, Loader2, Crown, Sparkles, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 
+const PAY_COLOR = { pendiente: '#FFD400', pagado: '#3ddc84', fallido: '#FF2D95', reembolsado: '#00F0FF' };
+
 const STATUS_LABEL = {
-  prueba: { t: 'Prueba', c: '#FFD400' }, activa: { t: 'Activa', c: '#3ddc84' },
+  pendiente: { t: 'Pago pendiente', c: '#FFD400' }, prueba: { t: 'Prueba', c: '#FFD400' }, activa: { t: 'Activa', c: '#3ddc84' },
   vencida: { t: 'Vencida', c: '#FF2D95' }, cancelada: { t: 'Cancelada', c: '#888' },
   pago_fallido: { t: 'Pago fallido', c: '#FF2D95' },
 };
@@ -22,6 +24,8 @@ export default function Membresias() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [coupon, setCoupon] = useState('');
+  const [couponInfo, setCouponInfo] = useState(null); // { valid, discount_type, discount_value } | { valid:false, reason }
+  const [couponChecking, setCouponChecking] = useState(false);
 
   const loadAll = () => {
     Promise.all([
@@ -31,39 +35,36 @@ export default function Membresias() {
   };
   useEffect(loadAll, [isAuthed]);
 
-  const applyCoupon = (price) => {
-    const c = coupon.trim().toUpperCase();
-    if (c === 'NEONEXA10') return +(price * 0.9).toFixed(2);
-    if (c === 'NEONEXA20') return +(price * 0.8).toFixed(2);
-    return price;
+  const checkCoupon = async () => {
+    const code = coupon.trim();
+    if (!code) { setCouponInfo(null); return; }
+    if (!isAuthed) { nav('/login'); return; }
+    setCouponChecking(true); setCouponInfo(null);
+    try {
+      const res = await pb.send('/api/coupons/validate', {
+        method: 'POST', body: { code, context: 'membership', amount: plans[0]?.price || 0 },
+      });
+      setCouponInfo({ valid: true, discount_type: res.discount_type, discount_value: res.discount_value });
+    } catch (ex) {
+      setCouponInfo({ valid: false, reason: ex?.response?.message || ex?.message || 'Cupón no válido.' });
+    } finally { setCouponChecking(false); }
+  };
+
+  const previewPrice = (price) => {
+    if (!couponInfo?.valid) return price;
+    const discount = couponInfo.discount_type === 'percent' ? price * (couponInfo.discount_value / 100) : couponInfo.discount_value;
+    return Math.max(0, +(price - discount).toFixed(2));
   };
 
   const subscribe = async (plan) => {
     if (!isAuthed) { nav('/login'); return; }
     setBusy(plan.id);
     try {
-      const finalPrice = applyCoupon(plan.price);
-      const start = new Date();
-      const end = addPeriod(start, plan.interval);
-      let mem;
-      if (membership) {
-        mem = await pb.collection('memberships').update(membership.id, {
-          plan: plan.id, status: 'activa', period_start: start.toISOString(), period_end: end.toISOString(),
-          cancel_at_period_end: false, coupon: coupon.trim(), auto_renew: true,
-        });
-      } else {
-        mem = await pb.collection('memberships').create({
-          plan: plan.id, status: 'activa', period_start: start.toISOString(), period_end: end.toISOString(),
-          cancel_at_period_end: false, coupon: coupon.trim(), auto_renew: true, owner: user.id,
-        });
-      }
-      await pb.collection('membership_history').create({
-        membership: mem.id, action: membership ? 'cambio_plan' : 'alta', amount: finalPrice,
-        currency: plan.currency || 'MXN', note: `${plan.name} (${plan.interval})`, coupon: coupon.trim(), owner: user.id,
+      const { init_point } = await pb.send('/api/mp/membership-preference', {
+        method: 'POST', body: { planId: plan.id, couponCode: couponInfo?.valid ? coupon.trim() : '' },
       });
-      await refresh(); loadAll();
-    } catch (e) { alert(e?.message || 'No se pudo procesar la membresía.'); }
-    finally { setBusy(null); }
+      window.location.href = init_point;
+    } catch (e) { alert(e?.response?.message || e?.message || 'No se pudo iniciar el pago.'); setBusy(null); }
   };
 
   const cancel = async () => {
@@ -124,9 +125,17 @@ export default function Membresias() {
       <section className="max-w-[90rem] mx-auto px-6 pb-6">
         <div className="nx-card p-4 flex flex-wrap items-center gap-3">
           <span className="text-sm text-white/60 uppercase tracking-widest">Cupón</span>
-          <input value={coupon} onChange={e => setCoupon(e.target.value)} placeholder="NEONEXA10"
+          <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponInfo(null); }} placeholder="Código de cupón"
             className="bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]"/>
-          <span className="text-xs text-white/40">Prueba NEONEXA10 (10%) o NEONEXA20 (20%)</span>
+          <button onClick={checkCoupon} disabled={couponChecking || !coupon.trim()} className="nx-btn-ghost px-4 py-2 text-xs">
+            {couponChecking ? 'Verificando…' : 'Aplicar cupón'}
+          </button>
+          {couponInfo?.valid && (
+            <span className="text-xs text-[#3ddc84]">
+              Válido — {couponInfo.discount_type === 'percent' ? `${couponInfo.discount_value}% de descuento` : `${money(couponInfo.discount_value)} de descuento`}
+            </span>
+          )}
+          {couponInfo && !couponInfo.valid && <span className="text-xs text-[#FF2D95]">{couponInfo.reason}</span>}
         </div>
       </section>
 
@@ -134,7 +143,7 @@ export default function Membresias() {
         <section className="max-w-[90rem] mx-auto px-6 pb-16 grid md:grid-cols-2 gap-6">
           {plans.length === 0 && <div className="nx-card p-12 text-center text-white/50 md:col-span-2">No hay planes disponibles por ahora.</div>}
           {plans.map(p => {
-            const discounted = applyCoupon(p.price);
+            const discounted = previewPrice(p.price);
             const isCurrent = cur?.plan === p.id && isMembershipActive(cur);
             return (
               <div key={p.id} className={`nx-card p-8 relative ${p.highlight ? 'ring-1 ring-[#00F0FF]/50' : ''}`}>
@@ -173,7 +182,7 @@ export default function Membresias() {
           <div className="nx-card overflow-hidden">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-white/50 border-b border-white/10">
-                <th className="p-4">Fecha</th><th className="p-4">Acción</th><th className="p-4">Detalle</th><th className="p-4">Monto</th>
+                <th className="p-4">Fecha</th><th className="p-4">Acción</th><th className="p-4">Detalle</th><th className="p-4">Pago</th><th className="p-4">Monto</th>
               </tr></thead>
               <tbody>
                 {history.map(h => (
@@ -181,6 +190,11 @@ export default function Membresias() {
                     <td className="p-4 text-white/60">{new Date(h.created).toLocaleDateString('es-MX')}</td>
                     <td className="p-4 uppercase text-xs tracking-widest text-[#00F0FF]">{h.action.replace(/_/g, ' ')}</td>
                     <td className="p-4 text-white/70">{h.note}{h.coupon && <span className="text-[#FFD400]"> · {h.coupon}</span>}</td>
+                    <td className="p-4">
+                      {h.payment_status && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-display uppercase tracking-widest" style={{ color: PAY_COLOR[h.payment_status] || '#888', background: (PAY_COLOR[h.payment_status] || '#888') + '18' }}>{h.payment_status}</span>
+                      )}
+                    </td>
                     <td className="p-4 font-display">{h.amount ? money(h.amount, h.currency) : '—'}</td>
                   </tr>
                 ))}

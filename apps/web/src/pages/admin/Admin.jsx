@@ -6,7 +6,7 @@ import pb from '@/lib/pocketbaseClient';
 import { money, invalidateSetting } from '@/lib/neonexa';
 import { STATUS_META, PAY_META, QUOTE_STATUS_META } from '@/pages/Dashboard';
 import { CATEGORIES } from '@/pages/Personalizados';
-import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images, ScrollText, FileText } from 'lucide-react';
+import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images, ScrollText, FileText, Tag } from 'lucide-react';
 import { TOOLS } from '@/lib/tools';
 import { PACK_CATEGORIES } from '@/pages/Packs';
 
@@ -14,7 +14,7 @@ const STATUSES = Object.keys(STATUS_META);
 const PAYS = ['pendiente', 'pagado', 'fallido', 'reembolsado'];
 
 const TABS_BY_ROLE = {
-  admin: ['resumen', 'pedidos', 'cotizaciones', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'packs', 'clientes', 'bitacora'],
+  admin: ['resumen', 'pedidos', 'cotizaciones', 'productos', 'membresias', 'cupones', 'notificaciones', 'precios', 'tools', 'packs', 'clientes', 'bitacora'],
   ventas: ['resumen', 'pedidos', 'cotizaciones', 'clientes'],
   operador: ['pedidos'],
 };
@@ -48,6 +48,7 @@ export default function Admin() {
     { id: 'cotizaciones', label: 'Cotizaciones', icon: FileText },
     { id: 'productos', label: 'Productos', icon: ShoppingBag },
     { id: 'membresias', label: 'Membresías', icon: Crown },
+    { id: 'cupones', label: 'Cupones', icon: Tag },
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
     { id: 'precios', label: 'Precios', icon: DollarSign },
     { id: 'tools', label: 'Tools / Límites', icon: Wrench },
@@ -82,6 +83,7 @@ export default function Admin() {
             {tab === 'cotizaciones' && <Cotizaciones quotes={quotes} reload={load}/>}
             {tab === 'productos' && <ProductosAdmin/>}
             {tab === 'membresias' && <MembresiasAdmin/>}
+            {tab === 'cupones' && <CuponesAdmin/>}
             {tab === 'notificaciones' && <NotificacionesAdmin/>}
             {tab === 'precios' && <Precios/>}
             {tab === 'tools' && <ToolLimitsAdmin/>}
@@ -584,6 +586,72 @@ function MembresiasAdmin() {
             </div>
             <button onClick={() => setEditing(p)} className="nx-btn-ghost px-3 py-1.5 text-xs">Editar</button>
             <button onClick={() => del(p.id)} className="text-[#FF2D95] p-2"><Trash2 size={16}/></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CuponesAdmin() {
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const blank = { code: '', discount_type: 'percent', discount_value: 10, applies_to: 'all', max_uses: 0, min_amount: 0, valid_from: '', valid_until: '', active: true };
+
+  const load = () => pb.collection('coupons').getFullList({ sort: '-created' }).then(setCoupons).catch(() => setCoupons([])).finally(() => setLoading(false));
+  useEffect(load, []);
+
+  const save = async () => {
+    const data = {
+      ...editing, code: editing.code.trim().toUpperCase(),
+      discount_value: +editing.discount_value, max_uses: +editing.max_uses || 0, min_amount: +editing.min_amount || 0,
+      valid_from: editing.valid_from || null, valid_until: editing.valid_until || null,
+    };
+    try {
+      if (data.id) await pb.collection('coupons').update(data.id, data);
+      else await pb.collection('coupons').create(data);
+      setEditing(null); load();
+    } catch (e) { alert(e?.message || 'No se pudo guardar el cupón.'); }
+  };
+  const del = async (id) => { if (!confirm('¿Eliminar cupón?')) return; try { await pb.collection('coupons').delete(id); load(); } catch { /* ignore */ } };
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]"/></div>;
+  return (
+    <div>
+      <p className="text-white/55 text-sm mb-4">Cupones reales con expiración, límite de uso y validación en servidor — aplican a membresías, pedidos, o ambos.</p>
+      <button onClick={() => setEditing(blank)} className="nx-btn-primary px-5 py-2.5 inline-flex items-center gap-2 mb-6"><Plus size={16}/>Nuevo cupón</button>
+      {editing && (
+        <div className="nx-card p-6 mb-6 grid sm:grid-cols-3 gap-4">
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Código</span><input className={numi + ' w-full'} value={editing.code} onChange={e => setEditing(x => ({ ...x, code: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Tipo</span>
+            <select className={sel + ' w-full'} value={editing.discount_type} onChange={e => setEditing(x => ({ ...x, discount_type: e.target.value }))}><option value="percent">Porcentaje</option><option value="fixed">Monto fijo</option></select></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Valor</span><input type="number" className={numi + ' w-full'} value={editing.discount_value} onChange={e => setEditing(x => ({ ...x, discount_value: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Aplica a</span>
+            <select className={sel + ' w-full'} value={editing.applies_to} onChange={e => setEditing(x => ({ ...x, applies_to: e.target.value }))}>
+              <option value="all">Membresías y pedidos</option><option value="membership">Solo membresías</option><option value="order">Solo pedidos</option>
+            </select></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Usos máximos (0 = ilimitado)</span><input type="number" className={numi + ' w-full'} value={editing.max_uses} onChange={e => setEditing(x => ({ ...x, max_uses: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Monto mínimo (0 = sin mínimo)</span><input type="number" className={numi + ' w-full'} value={editing.min_amount} onChange={e => setEditing(x => ({ ...x, min_amount: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Vigente desde</span><input type="date" className={numi + ' w-full'} value={editing.valid_from || ''} onChange={e => setEditing(x => ({ ...x, valid_from: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Vigente hasta</span><input type="date" className={numi + ' w-full'} value={editing.valid_until || ''} onChange={e => setEditing(x => ({ ...x, valid_until: e.target.value }))}/></label>
+          <label className="flex items-center gap-2 text-sm text-white/70 self-end"><input type="checkbox" checked={editing.active} onChange={e => setEditing(x => ({ ...x, active: e.target.checked }))} className="accent-[#00F0FF]"/>Activo</label>
+          <div className="sm:col-span-3 flex gap-3"><button onClick={save} className="nx-btn-primary px-5 py-2.5">Guardar</button><button onClick={() => setEditing(null)} className="nx-btn-ghost px-5 py-2.5">Cancelar</button></div>
+        </div>
+      )}
+      <div className="space-y-3">
+        {coupons.length === 0 && <div className="nx-card p-8 text-center text-white/50 text-sm">Sin cupones todavía.</div>}
+        {coupons.map(c => (
+          <div key={c.id} className="nx-card p-4 flex items-center gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <div className="font-display">{c.code} {!c.active && <span className="text-[#FF2D95] text-xs">(inactivo)</span>}</div>
+              <div className="text-xs text-white/40">
+                {c.discount_type === 'percent' ? `${c.discount_value}%` : money(c.discount_value)} · {{ all: 'membresías y pedidos', membership: 'solo membresías', order: 'solo pedidos' }[c.applies_to]} · usado {c.used_count || 0}{c.max_uses ? `/${c.max_uses}` : ''}
+                {(c.valid_from || c.valid_until) && <> · {c.valid_from ? new Date(c.valid_from).toLocaleDateString('es-MX') : '—'} → {c.valid_until ? new Date(c.valid_until).toLocaleDateString('es-MX') : '—'}</>}
+              </div>
+            </div>
+            <button onClick={() => setEditing({ ...c, valid_from: c.valid_from?.slice(0, 10) || '', valid_until: c.valid_until?.slice(0, 10) || '' })} className="nx-btn-ghost px-3 py-1.5 text-xs">Editar</button>
+            <button onClick={() => del(c.id)} className="text-[#FF2D95] p-2"><Trash2 size={16}/></button>
           </div>
         ))}
       </div>
