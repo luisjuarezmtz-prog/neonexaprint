@@ -1,18 +1,28 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import httpProxy from 'http-proxy';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PB_BINARY = path.join(__dirname, 'pocketbase');
 
 const PB_HOST = '127.0.0.1';
 const PB_PORT = 8090;
 const PUBLIC_PORT = process.env.PORT || 3000;
 
+// git on Windows doesn't preserve the unix executable bit, so force it here
+// instead of depending on the bit surviving clone/checkout on the server.
+try {
+  fs.chmodSync(PB_BINARY, 0o755);
+} catch (err) {
+  console.error('could not chmod pocketbase binary:', err.message);
+}
+
 function startPocketBase() {
   const pb = spawn(
-    path.join(__dirname, 'pocketbase'),
+    PB_BINARY,
     [
       'serve',
       `--http=${PB_HOST}:${PB_PORT}`,
