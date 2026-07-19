@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ToolShell from '@/components/ToolShell';
 import Dropzone from './Dropzone';
 import { useMembership } from '@/lib/membership';
-import { loadImageFromFile, makeThumb, recordJob, logUsage, logError, checkLimit, downloadDataURL, toolBySlug } from '@/lib/tools';
+import { loadImageFromFile, makeThumb, recordJob, logUsage, logError, checkLimit, downloadDataURL, dataUrlToBlob, getJobResultUrl, toolBySlug } from '@/lib/tools';
 import pb from '@/lib/pocketbaseClient';
 import { Loader2, Download, RotateCcw, History, AlertTriangle } from 'lucide-react';
 
@@ -64,10 +64,16 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
           thumbOut = makeThumb(oimg);
         } catch { /* ignore */ }
       }
+      const downloadName = result.downloadName || `neonexa-${slug}.png`;
+      let resultBlob = null;
+      if (result.outputDataUrl) {
+        try { resultBlob = dataUrlToBlob(result.outputDataUrl); } catch { /* ignore */ }
+      }
       await recordJob({
         tool: slug, title: file?.name || tool?.name, status: 'done',
         inputName: file?.name, inputPreview: thumbIn, outputPreview: thumbOut,
         params, result: result.result || {},
+        resultBlob, resultFilename: downloadName,
       });
       await logUsage(slug, 'run', { name: file?.name });
       loadJobs();
@@ -113,6 +119,15 @@ export default function ImageToolLayout({ slug, controls, defaultParams = {}, pr
                   <div className="truncate text-white/70">{j.title || j.input_name || 'Trabajo'}</div>
                   <div className="text-white/35">{new Date(j.created).toLocaleDateString('es-MX')} · <span style={{ color: j.status === 'error' ? '#FF2D95' : '#3ddc84' }}>{j.status}</span></div>
                 </div>
+                {j.result_file && (
+                  <button
+                    onClick={async () => { const url = await getJobResultUrl(j); if (url) window.open(url, '_blank'); }}
+                    title="Descargar resultado"
+                    className="shrink-0 p-1.5 rounded text-white/40 hover:text-[#00F0FF] hover:bg-white/5"
+                  >
+                    <Download size={13}/>
+                  </button>
+                )}
               </div>
             ))}
           </div>

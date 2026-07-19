@@ -58,17 +58,53 @@ export function makeThumb(img, max = 320) {
 }
 
 // ---- persistence: jobs, usage, errors ----
-export async function recordJob({ tool, title, status = 'done', inputName, inputPreview, outputPreview, params, result, error }) {
+export async function recordJob({ tool, title, status = 'done', inputName, inputPreview, outputPreview, params, result, error, resultBlob, resultFilename }) {
   const owner = pb.authStore.record?.id;
   if (!owner) return null;
   try {
-    const rec = await pb.collection('tool_jobs').create({
-      tool, title: title || '', status,
-      input_name: inputName || '', input_preview: inputPreview || '', output_preview: outputPreview || '',
-      params: params || {}, result: result || {}, error: error || '', owner,
-    }, { requestKey: `job-${tool}-${Date.now()}` });
+    // Result files are protected — stored so they're recoverable later via a
+    // short-lived token, instead of only ever existing as an in-memory data
+    // URL that's gone the moment the tab closes.
+    let payload;
+    if (resultBlob) {
+      payload = new FormData();
+      payload.append('tool', tool);
+      payload.append('title', title || '');
+      payload.append('status', status);
+      payload.append('input_name', inputName || '');
+      payload.append('input_preview', inputPreview || '');
+      payload.append('output_preview', outputPreview || '');
+      payload.append('params', JSON.stringify(params || {}));
+      payload.append('result', JSON.stringify(result || {}));
+      payload.append('error', error || '');
+      payload.append('owner', owner);
+      payload.append('result_file', resultBlob, resultFilename || 'resultado.png');
+    } else {
+      payload = {
+        tool, title: title || '', status,
+        input_name: inputName || '', input_preview: inputPreview || '', output_preview: outputPreview || '',
+        params: params || {}, result: result || {}, error: error || '', owner,
+      };
+    }
+    const rec = await pb.collection('tool_jobs').create(payload, { requestKey: `job-${tool}-${Date.now()}` });
     return rec;
   } catch (e) { console.info('recordJob skipped', String(e)); return null; }
+}
+
+// data:URL -> Blob, for uploading a canvas/text result as a real protected file
+export function dataUrlToBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(',');
+  const mime = /data:(.*?);base64/.exec(meta)?.[1] || 'application/octet-stream';
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+export async function getJobResultUrl(job) {
+  if (!job.result_file) return null;
+  const token = await pb.files.getToken();
+  return pb.files.getUrl(job, job.result_file, { token });
 }
 
 export async function logUsage(tool, action = 'run', meta = {}) {

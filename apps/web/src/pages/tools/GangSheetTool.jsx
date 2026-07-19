@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ToolShell, { labelCls, inputCls, rangeCls } from '@/components/ToolShell';
 import Dropzone from '@/components/tools/Dropzone';
-import { loadImageFromFile, recordJob, logUsage, logError, downloadDataURL, makeThumb } from '@/lib/tools';
+import { loadImageFromFile, recordJob, logUsage, logError, downloadDataURL, makeThumb, dataUrlToBlob, getJobResultUrl } from '@/lib/tools';
 import pb from '@/lib/pocketbaseClient';
 import { History, X, Loader2, Download } from 'lucide-react';
 
@@ -59,8 +59,11 @@ export default function GangSheetTool() {
       const dataUrl = c.toDataURL('image/png');
       const result = { widthCm: sheetW, heightCm: +(totalH / DPI * 2.54).toFixed(1), count: items.length };
       setOut({ dataUrl, ...result });
+      let resultBlob = null;
+      try { resultBlob = dataUrlToBlob(dataUrl); } catch { /* ignore */ }
       await recordJob({ tool: 'gang-sheet', title: `Gang sheet ${items.length} diseños`, status: 'done',
-        inputPreview: makeThumb(items[0].img), outputPreview: '', params: { sheetW, gap }, result });
+        inputPreview: makeThumb(items[0].img), outputPreview: '', params: { sheetW, gap }, result,
+        resultBlob, resultFilename: 'gang-sheet.png' });
       await logUsage('gang-sheet', 'run', { count: items.length });
       loadJobs();
     } catch (e) { setErr(String(e.message || e)); await logError('gang-sheet', e); }
@@ -84,7 +87,19 @@ export default function GangSheetTool() {
         <div className="pt-4 border-t border-white/10">
           <div className="font-display uppercase tracking-widest text-xs text-white/60 flex items-center gap-2"><History size={13}/>Historial</div>
           <div className="mt-3 space-y-1 text-xs text-white/60">
-            {jobs.map((j) => <div key={j.id} className="flex justify-between"><span className="truncate">{j.title}</span><span className="text-white/35">{new Date(j.created).toLocaleDateString('es-MX')}</span></div>)}
+            {jobs.map((j) => (
+              <div key={j.id} className="flex items-center justify-between gap-2">
+                <span className="truncate">{j.title}</span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-white/35">{new Date(j.created).toLocaleDateString('es-MX')}</span>
+                  {j.result_file && (
+                    <button onClick={async () => { const url = await getJobResultUrl(j); if (url) window.open(url, '_blank'); }} title="Descargar" className="p-1 rounded text-white/40 hover:text-[#00F0FF] hover:bg-white/5">
+                      <Download size={12}/>
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
