@@ -6,14 +6,15 @@ import pb from '@/lib/pocketbaseClient';
 import { money, invalidateSetting } from '@/lib/neonexa';
 import { STATUS_META, PAY_META } from '@/pages/Dashboard';
 import { CATEGORIES } from '@/pages/Personalizados';
-import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench } from 'lucide-react';
+import { LayoutDashboard, Package, DollarSign, Users, Loader2, Save, ShoppingBag, Crown, Bell, Plus, Trash2, Wrench, Images } from 'lucide-react';
 import { TOOLS } from '@/lib/tools';
+import { PACK_CATEGORIES } from '@/pages/Packs';
 
 const STATUSES = Object.keys(STATUS_META);
 const PAYS = ['pendiente', 'pagado', 'fallido', 'reembolsado'];
 
 const TABS_BY_ROLE = {
-  admin: ['resumen', 'pedidos', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'clientes'],
+  admin: ['resumen', 'pedidos', 'productos', 'membresias', 'notificaciones', 'precios', 'tools', 'packs', 'clientes'],
   ventas: ['resumen', 'pedidos', 'clientes'],
   operador: ['pedidos'],
 };
@@ -47,6 +48,7 @@ export default function Admin() {
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
     { id: 'precios', label: 'Precios', icon: DollarSign },
     { id: 'tools', label: 'Tools / Límites', icon: Wrench },
+    { id: 'packs', label: 'Packs', icon: Images },
     { id: 'clientes', label: 'Clientes', icon: Users },
   ];
   const tabs = allTabs.filter(t => allowedTabs.includes(t.id));
@@ -78,6 +80,7 @@ export default function Admin() {
             {tab === 'notificaciones' && <NotificacionesAdmin/>}
             {tab === 'precios' && <Precios/>}
             {tab === 'tools' && <ToolLimitsAdmin/>}
+            {tab === 'packs' && <PacksAdmin/>}
             {tab === 'clientes' && <Clientes users={users}/>}
           </div>
         )}
@@ -508,6 +511,177 @@ function ToolLimitsAdmin() {
         </table>
       </div>
       {msg && <div className="text-sm text-[#00F0FF]">{msg}</div>}
+    </div>
+  );
+}
+
+function PacksAdmin() {
+  const [packs, setPacks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const [managing, setManaging] = useState(null);
+  const blank = {
+    name: '', slug: '', category: PACK_CATEGORIES[0].id, subcategory: '', tags: '',
+    short_description: '', full_description: '', item_count: 0, formats: 'png',
+    resolution_note: '300 DPI, fondo transparente', price: 0, promo_price: '', promo_start: '', promo_end: '',
+    license_type: 'personal', license_notes: '', version: '1.0', status: 'borrador',
+  };
+
+  const load = () => pb.collection('image_packs').getFullList({ sort: '-created' }).then(setPacks).catch(() => setPacks([])).finally(() => setLoading(false));
+  useEffect(load, []);
+
+  const save = async () => {
+    const data = { ...editing };
+    data.price = +data.price || 0;
+    data.promo_price = data.promo_price === '' ? 0 : +data.promo_price;
+    data.item_count = +data.item_count || 0;
+    if (!data.slug) data.slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    data.tags = typeof data.tags === 'string' ? data.tags.split(',').map(s => s.trim()).filter(Boolean) : data.tags;
+    data.formats = typeof data.formats === 'string' ? data.formats.split(',').map(s => s.trim()).filter(Boolean) : data.formats;
+    try {
+      if (data.id) await pb.collection('image_packs').update(data.id, data);
+      else await pb.collection('image_packs').create(data);
+      setEditing(null); load();
+    } catch (e) { alert(e?.message || 'Error al guardar el pack'); }
+  };
+  const del = async (id) => { if (!confirm('¿Eliminar pack? Se borran también sus imágenes.')) return; try { await pb.collection('image_packs').delete(id); load(); } catch { /* ignore */ } };
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]"/></div>;
+
+  if (managing) return <PackImagesAdmin pack={managing} onBack={() => setManaging(null)}/>;
+
+  return (
+    <div>
+      <p className="text-white/55 text-sm mb-4">Biblioteca de Imágenes por Packs — se vende el pack completo, nunca imágenes sueltas.</p>
+      <button onClick={() => setEditing(blank)} className="nx-btn-primary px-5 py-2.5 inline-flex items-center gap-2 mb-6"><Plus size={16}/>Nuevo pack</button>
+      {editing && (
+        <div className="nx-card p-6 mb-6 grid sm:grid-cols-2 gap-4">
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Nombre</span><input className={numi + ' w-full'} value={editing.name} onChange={e => setEditing(x => ({ ...x, name: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Categoría</span>
+            <select className={sel + ' w-full'} value={editing.category} onChange={e => setEditing(x => ({ ...x, category: e.target.value }))}>
+              {PACK_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Subcategoría</span><input className={numi + ' w-full'} value={editing.subcategory} onChange={e => setEditing(x => ({ ...x, subcategory: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Etiquetas (separadas por coma)</span><input className={numi + ' w-full'} value={Array.isArray(editing.tags) ? editing.tags.join(', ') : editing.tags} onChange={e => setEditing(x => ({ ...x, tags: e.target.value }))}/></label>
+          <label className="text-xs sm:col-span-2"><span className="uppercase tracking-widest text-white/50 block mb-1">Descripción corta</span><input className={numi + ' w-full'} value={editing.short_description} onChange={e => setEditing(x => ({ ...x, short_description: e.target.value }))}/></label>
+          <label className="text-xs sm:col-span-2"><span className="uppercase tracking-widest text-white/50 block mb-1">Descripción completa</span><textarea rows={3} className={numi + ' w-full'} value={editing.full_description} onChange={e => setEditing(x => ({ ...x, full_description: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Cantidad de imágenes</span><input type="number" className={numi + ' w-full'} value={editing.item_count} onChange={e => setEditing(x => ({ ...x, item_count: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Formatos (coma)</span><input className={numi + ' w-full'} value={Array.isArray(editing.formats) ? editing.formats.join(', ') : editing.formats} onChange={e => setEditing(x => ({ ...x, formats: e.target.value }))}/></label>
+          <label className="text-xs sm:col-span-2"><span className="uppercase tracking-widest text-white/50 block mb-1">Nota de resolución/calidad</span><input className={numi + ' w-full'} value={editing.resolution_note} onChange={e => setEditing(x => ({ ...x, resolution_note: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Precio normal (MXN)</span><input type="number" className={numi + ' w-full'} value={editing.price} onChange={e => setEditing(x => ({ ...x, price: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Precio promo (0 = sin promo)</span><input type="number" className={numi + ' w-full'} value={editing.promo_price} onChange={e => setEditing(x => ({ ...x, promo_price: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Promo desde</span><input type="date" className={numi + ' w-full'} value={editing.promo_start?.slice(0, 10) || ''} onChange={e => setEditing(x => ({ ...x, promo_start: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Promo hasta</span><input type="date" className={numi + ' w-full'} value={editing.promo_end?.slice(0, 10) || ''} onChange={e => setEditing(x => ({ ...x, promo_end: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Licencia</span>
+            <select className={sel + ' w-full'} value={editing.license_type} onChange={e => setEditing(x => ({ ...x, license_type: e.target.value }))}>
+              <option value="personal">Personal</option>
+              <option value="comercial">Comercial</option>
+              <option value="no_reventa">Comercial, no reventa</option>
+              <option value="exclusivo">Exclusivo</option>
+            </select></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Versión</span><input className={numi + ' w-full'} value={editing.version} onChange={e => setEditing(x => ({ ...x, version: e.target.value }))}/></label>
+          <label className="text-xs sm:col-span-2"><span className="uppercase tracking-widest text-white/50 block mb-1">Notas de licencia / usos permitidos</span><textarea rows={2} className={numi + ' w-full'} value={editing.license_notes} onChange={e => setEditing(x => ({ ...x, license_notes: e.target.value }))}/></label>
+          <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Estado</span>
+            <select className={sel + ' w-full'} value={editing.status} onChange={e => setEditing(x => ({ ...x, status: e.target.value }))}>
+              <option value="borrador">Borrador</option>
+              <option value="publicado">Publicado</option>
+              <option value="oculto">Oculto</option>
+              <option value="agotado">Agotado / inactivo</option>
+            </select></label>
+          <div className="sm:col-span-2 flex gap-3"><button onClick={save} className="nx-btn-primary px-5 py-2.5">Guardar</button><button onClick={() => setEditing(null)} className="nx-btn-ghost px-5 py-2.5">Cancelar</button></div>
+        </div>
+      )}
+      <div className="space-y-3">
+        {packs.map(p => (
+          <div key={p.id} className="nx-card p-4 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="font-display">{p.name} {p.status !== 'publicado' && <span className="text-[#FF2D95] text-xs">({p.status})</span>}</div>
+              <div className="text-xs text-white/40">{PACK_CATEGORIES.find(c => c.id === p.category)?.label} · {p.item_count} imágenes · {money(p.promo_price > 0 ? p.promo_price : p.price)} · v{p.version}</div>
+            </div>
+            <button onClick={() => setManaging(p)} className="nx-btn-ghost px-3 py-1.5 text-xs inline-flex items-center gap-1"><Images size={13}/>Imágenes</button>
+            <button onClick={() => setEditing({ ...p, tags: (p.tags || []).join(', '), formats: (p.formats || []).join(', ') })} className="nx-btn-ghost px-3 py-1.5 text-xs">Editar</button>
+            <button onClick={() => del(p.id)} className="text-[#FF2D95] p-2"><Trash2 size={16}/></button>
+          </div>
+        ))}
+        {packs.length === 0 && <div className="nx-card p-16 text-center text-white/60">Sin packs todavía.</div>}
+      </div>
+    </div>
+  );
+}
+
+function PackImagesAdmin({ pack, onBack }) {
+  const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', dominant_color: '', style: '', product_type: '' });
+  const [thumbFile, setThumbFile] = useState(null);
+  const [originalFile, setOriginalFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const load = () => pb.collection('pack_images').getFullList({ filter: `pack = "${pack.id}"`, sort: 'sort' }).then(setImages).catch(() => setImages([])).finally(() => setLoading(false));
+  useEffect(load, []);
+
+  const addImage = async () => {
+    if (!thumbFile || !originalFile) { setMsg('Sube la muestra y el archivo original.'); return; }
+    setBusy(true); setMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('pack', pack.id);
+      fd.append('name', form.name || originalFile.name);
+      fd.append('thumbnail', thumbFile);
+      fd.append('dominant_color', form.dominant_color);
+      fd.append('style', form.style);
+      fd.append('product_type', form.product_type);
+      fd.append('sort', images.length);
+      const img = await pb.collection('pack_images').create(fd);
+
+      const ofd = new FormData();
+      ofd.append('pack', pack.id);
+      ofd.append('pack_image', img.id);
+      ofd.append('file', originalFile);
+      await pb.collection('pack_originals').create(ofd);
+
+      setForm({ name: '', dominant_color: '', style: '', product_type: '' });
+      setThumbFile(null); setOriginalFile(null);
+      load();
+    } catch (e) { setMsg(e?.message || 'Error al subir la imagen.'); } finally { setBusy(false); }
+  };
+  const delImage = async (id) => { if (!confirm('¿Eliminar imagen del pack?')) return; try { await pb.collection('pack_images').delete(id); load(); } catch { /* ignore */ } };
+
+  return (
+    <div>
+      <button onClick={onBack} className="nx-btn-ghost px-4 py-2 text-xs mb-6">← Volver a packs</button>
+      <div className="font-display text-xl uppercase mb-4">{pack.name} <span className="text-white/40 text-sm">({images.length} imágenes)</span></div>
+
+      <div className="nx-card p-6 mb-6 grid sm:grid-cols-2 gap-4">
+        <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Nombre de la imagen</span><input className={numi + ' w-full'} value={form.name} onChange={e => setForm(x => ({ ...x, name: e.target.value }))}/></label>
+        <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Color dominante</span><input className={numi + ' w-full'} value={form.dominant_color} onChange={e => setForm(x => ({ ...x, dominant_color: e.target.value }))}/></label>
+        <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Estilo</span><input className={numi + ' w-full'} value={form.style} onChange={e => setForm(x => ({ ...x, style: e.target.value }))}/></label>
+        <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Tipo de producto</span><input className={numi + ' w-full'} value={form.product_type} onChange={e => setForm(x => ({ ...x, product_type: e.target.value }))}/></label>
+        <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Muestra pública (con marca de agua)</span><input type="file" accept="image/*" className={numi + ' w-full'} onChange={e => setThumbFile(e.target.files[0])}/></label>
+        <label className="text-xs"><span className="uppercase tracking-widest text-white/50 block mb-1">Archivo original (protegido)</span><input type="file" className={numi + ' w-full'} onChange={e => setOriginalFile(e.target.files[0])}/></label>
+        <div className="sm:col-span-2 flex items-center gap-4">
+          <button disabled={busy} onClick={addImage} className="nx-btn-primary px-5 py-2.5 inline-flex items-center gap-2"><Plus size={16}/>{busy ? 'Subiendo…' : 'Agregar imagen'}</button>
+          {msg && <span className="text-sm text-[#FF2D95]">{msg}</span>}
+        </div>
+      </div>
+
+      {loading ? <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]"/></div> : (
+        <div className="grid sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {images.map(img => (
+            <div key={img.id} className="nx-card overflow-hidden">
+              <div className="aspect-square nx-checker flex items-center justify-center overflow-hidden">
+                {img.thumbnail ? <img src={pb.files.getURL(img, img.thumbnail)} alt={img.name} className="max-w-full max-h-full object-contain"/> : <Images size={40} className="text-white/30"/>}
+              </div>
+              <div className="p-3 flex items-center justify-between gap-2">
+                <div className="text-xs truncate">{img.name}</div>
+                <button onClick={() => delImage(img.id)} className="text-[#FF2D95] shrink-0"><Trash2 size={14}/></button>
+              </div>
+            </div>
+          ))}
+          {images.length === 0 && <div className="col-span-full text-center text-white/50 py-10">Sin imágenes en este pack todavía.</div>}
+        </div>
+      )}
     </div>
   );
 }

@@ -30,6 +30,9 @@ import DtfUv from './pages/dtf/DtfUv';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import CheckoutRetorno from './pages/CheckoutRetorno';
+import Packs from './pages/Packs';
+import PackDetail from './pages/PackDetail';
+import PackRetorno from './pages/PackRetorno';
 import Admin from './pages/admin/Admin';
 import WhatsAppButton from './components/WhatsAppButton';
 
@@ -55,6 +58,9 @@ function App() {
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/checkout/retorno" element={<CheckoutRetorno />} />
+            <Route path="/packs" element={<Packs />} />
+            <Route path="/packs/retorno" element={<PackRetorno />} />
+            <Route path="/packs/:slug" element={<PackDetail />} />
             <Route path="/tools" element={<ToolsHub />} />
             <Route path="/tools/inspector" element={<InspectorTool />} />
             <Route path="/tools/calculadora" element={<CalculadoraTool />} />

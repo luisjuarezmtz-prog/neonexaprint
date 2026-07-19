@@ -16,6 +16,7 @@ export default function SiteHeader() {
     { to: '/dtf/textil', label: 'DTF Textil' },
     { to: '/dtf/uv', label: 'DTF UV' },
     { to: '/personalizados', label: 'Personalizados' },
+    { to: '/packs', label: 'Packs' },
     { to: '/membresias', label: 'Membresías' },
     { to: '/tools', label: 'Tools' },
   ];
