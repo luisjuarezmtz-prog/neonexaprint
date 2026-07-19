@@ -35,7 +35,7 @@ export default function ToolShell({ eyebrow, title, subtitle, children, sidebar 
           <div className="py-32 flex justify-center"><Loader2 className="animate-spin text-[#00AEEF]" size={40}/></div>
         ) : !allowed ? gated : (
           <div className="mt-10 grid lg:grid-cols-[1fr_360px] gap-6">
-            <div className="nx-card p-4 md:p-6 min-h-[500px]">{children}</div>
+            <div className="nx-card p-4 md:p-6 min-h-[500px] flex flex-col">{children}</div>
             <aside className="nx-card p-6 self-start lg:sticky lg:top-24">{sidebar}</aside>
           </div>
         )}

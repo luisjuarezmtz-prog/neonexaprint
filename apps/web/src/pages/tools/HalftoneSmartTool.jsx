@@ -425,11 +425,11 @@ export default function HalftoneSmartTool() {
 
   return (
     <ToolShell eyebrow="NEONEXA TOOLS" title="Halftone Studio Pro" subtitle="Semitonos profesionales para DTF, DTG y serigrafía: separación CMYK, base blanca con choke y vista sobre prenda." sidebar={sidebar}>
-      <div className="space-y-5">
+      <div className="flex flex-col gap-5 h-full">
         {!ready && <Dropzone onFile={onFile} hint="PNG, JPG o WEBP. Se procesa 100% en tu navegador." />}
         {ready && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="text-xs text-white/50 truncate">{fileName}{meta ? ` · ${meta.w} × ${meta.h}px` : ''}</div>
               <div className="flex flex-wrap gap-2">
                 {VIEWS.map((v) => (
@@ -440,9 +440,9 @@ export default function HalftoneSmartTool() {
                 ))}
               </div>
             </div>
-            <div className="nx-checker rounded-lg overflow-auto max-h-[560px] p-2 flex items-center justify-center relative">
+            <div className="nx-checker rounded-lg overflow-auto flex-1 min-h-[400px] p-2 flex items-center justify-center relative">
               {busy && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10"><Loader2 className="animate-spin text-[#00AEEF]" size={28}/></div>}
-              <canvas ref={canvasRef} className="max-w-full" />
+              <canvas ref={canvasRef} className="max-w-full max-h-full" />
             </div>
           </>
         )}
