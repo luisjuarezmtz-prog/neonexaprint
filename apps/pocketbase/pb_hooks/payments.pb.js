@@ -7,25 +7,19 @@
 // payment from Mercado Pago's own API using our secret token (never trusts
 // the notification payload directly) and is the ONLY place payment_status
 // is ever set to "pagado".
-
-const MP_API = "https://api.mercadopago.com";
-
-function mpToken() {
-    const t = $os.getenv("MP_ACCESS_TOKEN");
-    if (!t) throw new InternalServerError("MP_ACCESS_TOKEN no configurado.");
-    return t;
-}
-
-function siteUrl() {
-    return $os.getenv("SITE_URL") || "https://app.neonexaprint.com.mx";
-}
-
-function apiUrl() {
-    return $os.getenv("API_URL") || "https://api.neonexaprint.com.mx";
-}
+//
+// Note: every helper is inlined inside each routerAdd callback on purpose —
+// PocketBase's JSVM does not reliably resolve calls from a route handler to
+// a function/const declared elsewhere at the top of this same file (it
+// intermittently throws "X is not defined" for such cross-references).
 
 // ---- create a Checkout Pro preference for an order's pending payment ----
 routerAdd("POST", "/api/mp/preference", (e) => {
+    const mpAccessToken = $os.getenv("MP_ACCESS_TOKEN");
+    if (!mpAccessToken) throw new InternalServerError("MP_ACCESS_TOKEN no configurado.");
+    const site = $os.getenv("SITE_URL") || "https://app.neonexaprint.com.mx";
+    const api = $os.getenv("API_URL") || "https://api.neonexaprint.com.mx";
+
     const auth = e.auth;
     if (!auth) throw new UnauthorizedError("Debes iniciar sesión.");
 
@@ -55,18 +49,18 @@ routerAdd("POST", "/api/mp/preference", (e) => {
         payer: { email: contact.email || auth.get("email") },
         external_reference: order.id,
         back_urls: {
-            success: `${siteUrl()}/checkout/retorno?order=${order.id}`,
-            pending: `${siteUrl()}/checkout/retorno?order=${order.id}`,
-            failure: `${siteUrl()}/checkout/retorno?order=${order.id}`,
+            success: `${site}/checkout/retorno?order=${order.id}`,
+            pending: `${site}/checkout/retorno?order=${order.id}`,
+            failure: `${site}/checkout/retorno?order=${order.id}`,
         },
         auto_return: "approved",
-        notification_url: `${apiUrl()}/api/mp/webhook`,
+        notification_url: `${api}/api/mp/webhook`,
     };
 
     const res = $http.send({
-        url: `${MP_API}/checkout/preferences`,
+        url: "https://api.mercadopago.com/checkout/preferences",
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${mpToken()}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${mpAccessToken}` },
         body: JSON.stringify(pref),
         timeout: 30,
     });
@@ -84,6 +78,9 @@ routerAdd("POST", "/api/mp/preference", (e) => {
 
 // ---- Mercado Pago webhook ----
 routerAdd("POST", "/api/mp/webhook", (e) => {
+    const mpAccessToken = $os.getenv("MP_ACCESS_TOKEN");
+    if (!mpAccessToken) throw new InternalServerError("MP_ACCESS_TOKEN no configurado.");
+
     const info = e.requestInfo();
     const body = info.body || {};
     const query = info.query || {};
@@ -96,9 +93,9 @@ routerAdd("POST", "/api/mp/webhook", (e) => {
     }
 
     const res = $http.send({
-        url: `${MP_API}/v1/payments/${paymentId}`,
+        url: `https://api.mercadopago.com/v1/payments/${paymentId}`,
         method: "GET",
-        headers: { "Authorization": `Bearer ${mpToken()}` },
+        headers: { "Authorization": `Bearer ${mpAccessToken}` },
         timeout: 30,
     });
 
