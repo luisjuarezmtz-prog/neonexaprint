@@ -23,10 +23,12 @@ function Shell({ title, subtitle, children }) {
 const inputClass = "w-full bg-black/50 border border-[#00AEEF]/30 px-4 py-3 rounded text-white placeholder:text-white/30 focus:outline-none focus:border-[#00F0FF] focus:ring-2 focus:ring-[#00F0FF]/30 transition";
 
 export function LoginPage() {
-  const { login, isAuthed } = useAuth();
+  const { login, requestLoginOTP, completeMfaLogin, isAuthed } = useAuth();
   const nav = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [mfa, setMfa] = useState(null); // { mfaId, otpId } once a second factor is required
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   if (isAuthed) return <Navigate to="/dashboard" replace />;
@@ -34,24 +36,52 @@ export function LoginPage() {
   const submit = async (e) => {
     e.preventDefault();
     setErr(''); setLoading(true);
-    try { await login(email, password); nav('/dashboard'); }
-    catch { setErr('Credenciales incorrectas.'); }
-    finally { setLoading(false); }
+    try {
+      if (mfa) {
+        await completeMfaLogin(mfa.otpId, code, mfa.mfaId);
+        nav('/dashboard');
+        return;
+      }
+      await login(email, password);
+      nav('/dashboard');
+    } catch (ex) {
+      const mfaId = ex?.response?.mfaId;
+      if (mfaId && !mfa) {
+        try {
+          const { otpId } = await requestLoginOTP(email);
+          setMfa({ mfaId, otpId });
+        } catch { setErr('No se pudo enviar el código de verificación.'); }
+      } else if (mfa) {
+        setErr('Código incorrecto.');
+      } else {
+        setErr('Credenciales incorrectas.');
+      }
+    } finally { setLoading(false); }
   };
   return (
     <Shell title="Entrar" subtitle="NEONEXA · ACCESO">
       <form onSubmit={submit} className="space-y-4">
-        <div>
-          <label className="text-xs uppercase tracking-widest text-white/60">Email</label>
-          <input className={inputClass + ' mt-2'} type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@correo.com"/>
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-widest text-white/60">Contraseña</label>
-          <input className={inputClass + ' mt-2'} type="password" required minLength={8} value={password} onChange={e=>setPassword(e.target.value)}/>
-        </div>
+        {!mfa ? (
+          <>
+            <div>
+              <label className="text-xs uppercase tracking-widest text-white/60">Email</label>
+              <input className={inputClass + ' mt-2'} type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@correo.com"/>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-widest text-white/60">Contraseña</label>
+              <input className={inputClass + ' mt-2'} type="password" required minLength={8} value={password} onChange={e=>setPassword(e.target.value)}/>
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="text-xs uppercase tracking-widest text-white/60">Código de verificación</label>
+            <p className="text-white/50 text-xs mt-1 mb-2">Te enviamos un código a {email}. Revisa tu correo.</p>
+            <input className={inputClass} inputMode="numeric" required value={code} onChange={e=>setCode(e.target.value)} placeholder="123456" autoFocus/>
+          </div>
+        )}
         {err && <div className="text-[#FF2D95] text-sm">{err}</div>}
         <button disabled={loading} className="nx-btn-primary w-full py-3 mt-2 flex items-center justify-center gap-2">
-          {loading && <Loader2 className="animate-spin" size={16}/>} Entrar
+          {loading && <Loader2 className="animate-spin" size={16}/>} {mfa ? 'Verificar código' : 'Entrar'}
         </button>
       </form>
       <div className="mt-6 text-sm text-white/60">

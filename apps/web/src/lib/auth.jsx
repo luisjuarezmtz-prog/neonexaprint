@@ -13,6 +13,11 @@ export function AuthProvider({ children }) {
     isStaff: ['admin', 'operador', 'ventas'].includes(user?.role),
     isVerified: !!user?.verified,
     login: (email, password) => pb.collection('users').authWithPassword(email, password),
+    // MFA (admin accounts only, once enabled): a successful password check on
+    // an MFA-gated account fails with a mfaId instead of a token — the caller
+    // requests an OTP by email, then completes login with that code + mfaId.
+    requestLoginOTP: (email) => pb.collection('users').requestOTP(email),
+    completeMfaLogin: (otpId, code, mfaId) => pb.collection('users').authWithOTP(otpId, code, { body: { mfaId } }),
     resendVerification: () => pb.collection('users').requestVerification(user.email),
     signup: async (fields) => {
       const { email, password, name, phone = '', company = '', rfc = '' } = fields;
