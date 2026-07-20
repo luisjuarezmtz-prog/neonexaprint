@@ -28,6 +28,7 @@ export default function Admin() {
   const [orders, setOrders] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [users, setUsers] = useState([]);
+  const [memberships, setMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
@@ -35,7 +36,8 @@ export default function Admin() {
       pb.collection('orders').getFullList({ sort: '-created', expand: 'order_items_via_order' }).catch(() => []),
       pb.collection('quotes').getFullList({ sort: '-created', expand: 'product,file' }).catch(() => []),
       pb.collection('users').getFullList({ sort: '-created' }).catch(() => []),
-    ]).then(([o, q, u]) => { setOrders(o); setQuotes(q); setUsers(u); }).finally(() => setLoading(false));
+      pb.collection('memberships').getFullList({ sort: '-created', expand: 'plan' }).catch(() => []),
+    ]).then(([o, q, u, m]) => { setOrders(o); setQuotes(q); setUsers(u); setMemberships(m); }).finally(() => setLoading(false));
   };
   useEffect(() => { if (isAuthed && isStaff) load(); }, [isAuthed, isStaff]);
   useEffect(() => { if (!tab && allowedTabs.length) setTab(allowedTabs[0]); }, [allowedTabs, tab]);
@@ -89,7 +91,7 @@ export default function Admin() {
             {tab === 'precios' && <Precios/>}
             {tab === 'tools' && <ToolLimitsAdmin/>}
             {tab === 'packs' && <PacksAdmin/>}
-            {tab === 'clientes' && <Clientes users={users}/>}
+            {tab === 'clientes' && <Clientes users={users} memberships={memberships}/>}
             {tab === 'bitacora' && <Bitacora/>}
           </div>
         )}
@@ -451,25 +453,46 @@ function Precios() {
   );
 }
 
-function Clientes({ users }) {
+const MEMBERSHIP_STATUS_LABEL = {
+  pendiente: { t: 'Pago pendiente', c: '#FFD400' }, prueba: { t: 'Prueba', c: '#FFD400' }, activa: { t: 'Activa', c: '#3ddc84' },
+  vencida: { t: 'Vencida', c: '#FF2D95' }, cancelada: { t: 'Cancelada', c: '#888' },
+  pago_fallido: { t: 'Pago fallido', c: '#FF2D95' },
+};
+
+function Clientes({ users, memberships = [] }) {
   const clients = users.filter(u => u.role !== 'admin');
+  // memberships is sorted -created, so the first match per owner is the most recent one.
+  const membershipByOwner = {};
+  for (const m of memberships) if (!membershipByOwner[m.owner]) membershipByOwner[m.owner] = m;
   if (clients.length === 0) return <div className="nx-card p-16 text-center text-white/60">Sin clientes registrados.</div>;
   return (
     <div className="nx-card overflow-hidden">
       <table className="w-full text-sm">
         <thead><tr className="text-left text-white/50 border-b border-white/10">
-          <th className="p-4">Nombre</th><th className="p-4">Email</th><th className="p-4">Teléfono</th><th className="p-4">Empresa</th><th className="p-4">Alta</th>
+          <th className="p-4">Nombre</th><th className="p-4">Email</th><th className="p-4">Teléfono</th><th className="p-4">Empresa</th><th className="p-4">Membresía</th><th className="p-4">Alta</th>
         </tr></thead>
         <tbody>
-          {clients.map(c => (
-            <tr key={c.id} className="border-b border-white/5">
-              <td className="p-4">{c.name || '—'}</td>
-              <td className="p-4 text-white/70">{c.email}</td>
-              <td className="p-4 text-white/70">{c.phone || '—'}</td>
-              <td className="p-4 text-white/70">{c.company || '—'}</td>
-              <td className="p-4 text-white/40">{new Date(c.created).toLocaleDateString('es-MX')}</td>
-            </tr>
-          ))}
+          {clients.map(c => {
+            const m = membershipByOwner[c.id];
+            const st = m && MEMBERSHIP_STATUS_LABEL[m.status];
+            return (
+              <tr key={c.id} className="border-b border-white/5">
+                <td className="p-4">{c.name || '—'}</td>
+                <td className="p-4 text-white/70">{c.email}</td>
+                <td className="p-4 text-white/70">{c.phone || '—'}</td>
+                <td className="p-4 text-white/70">{c.company || '—'}</td>
+                <td className="p-4">
+                  {m ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/70">{m.expand?.plan?.name || '—'}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full font-display uppercase tracking-widest" style={{ color: st?.c, background: (st?.c || '#888') + '20' }}>{st?.t || m.status}</span>
+                    </div>
+                  ) : <span className="text-white/30">Sin membresía</span>}
+                </td>
+                <td className="p-4 text-white/40">{new Date(c.created).toLocaleDateString('es-MX')}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
