@@ -238,7 +238,7 @@ export default function HalftoneSmartTool() {
   const [bayerSize, setBayerSize] = useState(8);
   const [diffusionAlgo, setDiffusionAlgo] = useState('floyd');
   const [minDotPct, setMinDotPct] = useState(0);
-  const [maxDotPct, setMaxDotPct] = useState(100);
+  const [maxDotPct, setMaxDotPct] = useState(130);
   const [zoom, setZoom] = useState(100);
   const [compareMode, setCompareMode] = useState(false);
   const [comparePos, setComparePos] = useState(50);
@@ -552,7 +552,8 @@ export default function HalftoneSmartTool() {
             </label>
             <label className="block mt-3">
               <span className={labelCls}>Punto máximo: {maxDotPct}%</span>
-              <input type="range" min="10" max="100" value={maxDotPct} onChange={(e) => setMaxDotPct(+e.target.value)} className={rangeCls} />
+              <input type="range" min="10" max="200" value={maxDotPct} onChange={(e) => setMaxDotPct(+e.target.value)} className={rangeCls} />
+              <span className="text-[11px] text-white/40 mt-1 block">Arriba de 100% los puntos se solapan en zonas sólidas (contornos, negros) para que se vean como línea continua en vez de puntos separados — compensa la ganancia de punto real de impresión.</span>
             </label>
           </>
         )}
