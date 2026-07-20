@@ -138,7 +138,7 @@ const BAYER = {
 // threshold matrix instead of drawing a variable-size dot. Runs at native
 // pixel resolution — the "cell" size just controls how large each matrix
 // entry is drawn (coarser = more visible texture, like a real halftone screen).
-function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectHi, hiThreshold, protectLo, loThreshold, ink, bgMask) {
+function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectHi, hiThreshold, protectLo, loThreshold, ink, bgMask, darkGarment) {
   const matrix = BAYER[n] || BAYER[8];
   const blockPx = Math.max(1, Math.round(cell / n));
   const id = actx.createImageData(w, h);
@@ -149,7 +149,7 @@ function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, p
       if (a <= 0.01) continue;
       const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const protect = (protectHi && lum >= hiThreshold) || (protectLo && lum <= loThreshold);
-      const coverage = protect ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
+      const coverage = protect ? 1 : correctedVal(darkGarment ? lum : 255 - lum, contrast, gamma, gain, invert);
       const mx = Math.floor(x / blockPx) % n, my = Math.floor(y / blockPx) % n;
       const th = (matrix[my][mx] + 0.5) / (n * n);
       if (coverage <= th) continue;
@@ -169,13 +169,13 @@ const DIFFUSION_KERNELS = {
 // Classic error-diffusion dithering (Floyd–Steinberg / Atkinson / JJN): quantizes
 // each pixel to full ink or none, in raster order, propagating the rounding
 // error to not-yet-visited neighbors per the chosen kernel.
-function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectHi, hiThreshold, protectLo, loThreshold, ink, bgMask) {
+function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectHi, hiThreshold, protectLo, loThreshold, ink, bgMask, darkGarment) {
   const cov = new Float32Array(w * h), alphaBuf = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const di = i * 4;
     const lum = 0.2126 * data[di] + 0.7152 * data[di + 1] + 0.0722 * data[di + 2];
     const protect = (protectHi && lum >= hiThreshold) || (protectLo && lum <= loThreshold);
-    cov[i] = protect ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
+    cov[i] = protect ? 1 : correctedVal(darkGarment ? lum : 255 - lum, contrast, gamma, gain, invert);
     alphaBuf[i] = (bgMask && bgMask[i]) ? 0 : data[di + 3] / 255;
   }
   const kernel = DIFFUSION_KERNELS[algo] || DIFFUSION_KERNELS.floyd;
@@ -302,12 +302,12 @@ export default function HalftoneSmartTool() {
     bctx.putImageData(bid, 0, 0);
 
     if (pattern === 'bayer') {
-      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, hexToRgb(inkColor), bgMask);
+      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, hexToRgb(inkColor), bgMask, bgMode === 'dark');
       applyHardEdges();
       return;
     }
     if (pattern === 'diffusion') {
-      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, hexToRgb(inkColor), bgMask);
+      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, hexToRgb(inkColor), bgMask, bgMode === 'dark');
       applyHardEdges();
       return;
     }
@@ -335,15 +335,21 @@ export default function HalftoneSmartTool() {
         const p = sampleRegion(data, w, h, x, y, cell * 0.48, bgMask);
         if (!p.a) continue;
         const protect = (protectHighlights && p.lum >= highlightThreshold) || (protectShadows && p.lum <= shadowThreshold);
+        // Coverage direction flips with the garment: on a DARK garment, highlights
+        // need solid ink (else the black fabric bleeds through and looks muddy) and
+        // shadows are the ones that get perforated (letting black fabric read as
+        // the shadow) — light = high coverage. On light/neutral, it's the opposite:
+        // shadows need solid ink, highlights perforate to reveal the white fabric.
+        const toneVal = bgMode === 'dark' ? p.lum : (255 - p.lum);
         if (mode === 'color') {
-          // Dot size follows the sampled color's own luminance (dark = big dot,
-          // light = small dot), like a real photographic color separation —
-          // using only alpha here (as before) made every fully-opaque flat-color
-          // design render at near-uniform, near-solid dot size regardless of tone.
-          const d = protect ? 1 : Math.max(0.02, correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a);
+          // Dot size follows the sampled color's own luminance, like a real
+          // photographic color separation — using only alpha here (as before) made
+          // every fully-opaque flat-color design render at near-uniform, near-solid
+          // dot size regardless of tone.
+          const d = protect ? 1 : Math.max(0.02, correctedVal(toneVal, contrast, gamma, gain, invert) * p.a);
           markDot(actx, x, y, cell, d, p, p.a, ang, shape, minS, maxS);
         } else if (mode === 'mono' || mode === 'grayscale') {
-          const d = protect ? 1 : correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a;
+          const d = protect ? 1 : correctedVal(toneVal, contrast, gamma, gain, invert) * p.a;
           markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape, minS, maxS);
         } else if (mode === 'picked') {
           const toleranceDist = Math.max(1, (pickTolerance / 100) * MAX_COLOR_DIST);
@@ -353,8 +359,9 @@ export default function HalftoneSmartTool() {
             if (colorDistance(p.r, p.g, p.b, pc.r, pc.g, pc.b) <= toleranceDist) { isProtected = true; break; }
           }
           if (!isProtected) {
+            const d = protect ? 1 : Math.max(0.02, correctedVal(toneVal, contrast, gamma, gain, invert) * p.a);
             clearCell(actx, x, y, cell, ang);
-            markDot(actx, x, y, cell, Math.max(0.02, p.a), p, p.a, ang, shape, minS, maxS);
+            markDot(actx, x, y, cell, d, p, p.a, ang, shape, minS, maxS);
           }
           // protected: leave the original pixels (already drawn as the base layer) untouched
         } else {
