@@ -16,6 +16,10 @@ function hexToRgb(hex) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 function clampVal(v, a = 0, b = 1) { return Math.max(a, Math.min(b, v)); }
+function isDarkColor(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+}
 function correctedVal(v, contrast, gamma, gain, invert) {
   let x = v / 255;
   x = clampVal((x - 0.5) * contrast + 0.5);
@@ -186,9 +190,9 @@ export default function HalftoneSmartTool() {
   const [technique, setTechnique] = useState('dtf');
   const [mode, setMode] = useState('color');
   const [shape, setShape] = useState('round');
-  const [angle, setAngle] = useState(22.5);
+  const [angle, setAngle] = useState(45);
   const [contrast, setContrast] = useState(1.2);
-  const [gamma, setGamma] = useState(1);
+  const [gamma, setGamma] = useState(1.8);
   const [gain, setGain] = useState(0);
   const [inkColor, setInkColor] = useState('#ffffff');
   const [invert, setInvert] = useState(false);
@@ -196,13 +200,15 @@ export default function HalftoneSmartTool() {
   const [underbase, setUnderbase] = useState(true);
   const [choke, setChoke] = useState(1);
   const [baseOpacity, setBaseOpacity] = useState(92);
-  const [bgMode, setBgMode] = useState('none'); // 'none' | 'light' | 'dark'
-  const [threshold, setThreshold] = useState(248);
+  const [bgMode, setBgMode] = useState('dark'); // 'none' | 'light' | 'dark' — auto-follows garment color
+  const [threshold, setThreshold] = useState(30);
   const [pickedColors, setPickedColors] = useState([]); // [{ hex }]
   const [pickTolerance, setPickTolerance] = useState(24);
   const [picking, setPicking] = useState(false);
-  const [protectHighlights, setProtectHighlights] = useState(false);
+  const [protectHighlights, setProtectHighlights] = useState(true);
   const [highlightThreshold, setHighlightThreshold] = useState(200);
+  const [hardEdges, setHardEdges] = useState(false);
+  const [hardEdgeThreshold, setHardEdgeThreshold] = useState(128);
   const [pattern, setPattern] = useState('am'); // 'am' | 'bayer' | 'diffusion'
   const [bayerSize, setBayerSize] = useState(8);
   const [diffusionAlgo, setDiffusionAlgo] = useState('floyd');
@@ -242,6 +248,16 @@ export default function HalftoneSmartTool() {
     [art, base, cRef.current, mRef.current, yRef.current, kRef.current].forEach((c) => { c.width = w; c.height = h; });
     const actx = art.getContext('2d'), bctx = base.getContext('2d');
     actx.clearRect(0, 0, w, h); bctx.clearRect(0, 0, w, h);
+    // "Bordes duros": snaps every alpha value to fully opaque or fully
+    // transparent, removing anti-aliased/semi-transparent edge pixels —
+    // matches NOVAGE's "Eliminar Semitransparencias" DTF finishing step.
+    const applyHardEdges = () => {
+      if (!hardEdges) return;
+      const aid = actx.getImageData(0, 0, w, h);
+      const d4 = aid.data;
+      for (let i = 3; i < d4.length; i += 4) d4[i] = d4[i] >= hardEdgeThreshold ? 255 : 0;
+      actx.putImageData(aid, 0, 0);
+    };
     ['c', 'm', 'y', 'k'].forEach((k) => channelRefs[k].current.getContext('2d').clearRect(0, 0, w, h));
 
     const sctx = s.getContext('2d', { willReadFrequently: true });
@@ -262,10 +278,12 @@ export default function HalftoneSmartTool() {
 
     if (pattern === 'bayer') {
       renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, hexToRgb(inkColor));
+      applyHardEdges();
       return;
     }
     if (pattern === 'diffusion') {
       renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, hexToRgb(inkColor));
+      applyHardEdges();
       return;
     }
 
@@ -322,6 +340,7 @@ export default function HalftoneSmartTool() {
         }
       }
     }
+    applyHardEdges();
   };
 
   const renderView = () => {
@@ -355,7 +374,7 @@ export default function HalftoneSmartTool() {
   };
 
   // Full regeneration: anything that changes the actual dot pattern.
-  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct]);
+  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct, hardEdges, hardEdgeThreshold]);
   // Cheap redraw only: these affect compositing, not the generated dots/base.
   useEffect(() => { if (ready) renderView(); /* eslint-disable-next-line */ }, [view, garmentColor, underbase, baseOpacity]);
 
@@ -390,13 +409,24 @@ export default function HalftoneSmartTool() {
       await recordJob({
         tool: 'halftone-smart', title: `Semitono ${fileName || 'diseño'}`, status: 'done',
         inputPreview: thumbImgRef.current ? makeThumb(thumbImgRef.current) : '', outputPreview: '',
-        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct },
+        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct, hardEdges, hardEdgeThreshold },
         result: { width: srcRef.current.width, height: srcRef.current.height, dpi, lpi, mode, shape },
         resultBlob: blob, resultFilename: 'semitono_pro.png',
       });
       await logUsage('halftone-smart', 'run', { mode, dpi, lpi });
       loadJobs();
     }, 'image/png');
+  };
+
+  // Choosing a garment auto-configures background removal + highlight
+  // protection to match it (dark garment → remove dark bg, light garment →
+  // remove light bg) — matches NOVAGE's "Modo de Prenda" behavior, where one
+  // choice drives the rest instead of toggling several controls by hand.
+  const applyGarment = (hex) => {
+    setGarmentColor(hex);
+    const dark = isDarkColor(hex);
+    setBgMode(dark ? 'dark' : 'light');
+    setThreshold(dark ? 30 : 248);
   };
 
   const handleCanvasClick = (e) => {
@@ -573,14 +603,15 @@ export default function HalftoneSmartTool() {
         <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Prenda y base blanca</div>
         <div className="flex flex-wrap gap-2 mb-3">
           {GARMENTS.map((g) => (
-            <button key={g} type="button" onClick={() => setGarmentColor(g)}
+            <button key={g} type="button" onClick={() => applyGarment(g)}
               className={`w-8 h-8 rounded-full border-2 ${garmentColor === g ? 'border-[#00F0FF]' : 'border-white/20'}`} style={{ background: g }} />
           ))}
         </div>
         <label className="block">
           <span className={labelCls}>Color de prenda personalizado</span>
-          <input type="color" value={garmentColor} onChange={(e) => setGarmentColor(e.target.value)} className="w-full h-9 rounded border border-[#00AEEF]/30 bg-black/50" />
+          <input type="color" value={garmentColor} onChange={(e) => applyGarment(e.target.value)} className="w-full h-9 rounded border border-[#00AEEF]/30 bg-black/50" />
         </label>
+        <div className="text-[11px] text-white/40 mt-1">El fondo y la protección de luces se ajustan automáticamente según la prenda; puedes anularlos abajo en "Fondo".</div>
         <label className="flex items-center gap-2 text-sm text-white/70 mt-3">
           <input type="checkbox" checked={underbase} onChange={(e) => setUnderbase(e.target.checked)} className="accent-[#00F0FF]" /> Mostrar base blanca
         </label>
@@ -608,6 +639,20 @@ export default function HalftoneSmartTool() {
           <label className="block mt-3">
             <span className={labelCls}>{bgMode === 'dark' ? 'Tolerancia de negro' : 'Umbral'}: {threshold}</span>
             <input type="range" min={bgMode === 'dark' ? 0 : 180} max={bgMode === 'dark' ? 80 : 255} value={threshold} onChange={(e) => setThreshold(+e.target.value)} className={rangeCls} />
+          </label>
+        )}
+      </div>
+
+      <div className="pt-4 border-t border-white/10">
+        <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Acabado DTF</div>
+        <label className="flex items-center gap-2 text-sm text-white/70">
+          <input type="checkbox" checked={hardEdges} onChange={(e) => setHardEdges(e.target.checked)} className="accent-[#00F0FF]" /> Eliminar semitransparencias (bordes duros)
+        </label>
+        <div className="text-[11px] text-white/40 mt-1">Quita el antialiasing para impresión DTF: cada píxel del arte final queda 100% opaco o 100% transparente.</div>
+        {hardEdges && (
+          <label className="block mt-3">
+            <span className={labelCls}>Umbral de opacidad: {hardEdgeThreshold}</span>
+            <input type="range" min="1" max="254" value={hardEdgeThreshold} onChange={(e) => setHardEdgeThreshold(+e.target.value)} className={rangeCls} />
           </label>
         )}
       </div>
