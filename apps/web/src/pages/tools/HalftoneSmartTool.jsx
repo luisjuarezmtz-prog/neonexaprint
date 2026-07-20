@@ -23,7 +23,7 @@ function correctedVal(v, contrast, gamma, gain, invert) {
   x = clampVal(x + gain / 100);
   return invert ? 1 - x : x;
 }
-function sampleRegion(data, w, h, cx, cy, r, removeLight, threshold) {
+function sampleRegion(data, w, h, cx, cy, r, bgMode, threshold) {
   let R = 0, G = 0, B = 0, A = 0, N = 0;
   const st = Math.max(1, Math.floor(r / 2));
   for (let y = Math.max(0, ~~(cy - r)); y < Math.min(h, cy + r); y += st) {
@@ -31,7 +31,8 @@ function sampleRegion(data, w, h, cx, cy, r, removeLight, threshold) {
       const i = (y * w + x) * 4;
       let a = data[i + 3] / 255;
       const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-      if (removeLight && lum >= threshold) a = 0;
+      if (bgMode === 'light' && lum >= threshold) a = 0;
+      else if (bgMode === 'dark' && lum <= threshold) a = 0;
       R += data[i] * a; G += data[i + 1] * a; B += data[i + 2] * a; A += a; N++;
     }
   }
@@ -39,6 +40,11 @@ function sampleRegion(data, w, h, cx, cy, r, removeLight, threshold) {
   const r0 = R / A, g0 = G / A, b0 = B / A;
   return { r: r0, g: g0, b: b0, a: A / N, lum: 0.2126 * r0 + 0.7152 * g0 + 0.0722 * b0 };
 }
+function colorDistance(r1, g1, b1, r2, g2, b2) {
+  const dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+const MAX_COLOR_DIST = Math.sqrt(255 * 255 * 3);
 function markDot(ctx, x, y, size, d, col, alpha, ang, shape) {
   if (d <= 0.001 || alpha <= 0.001) return;
   ctx.save();
@@ -109,8 +115,13 @@ export default function HalftoneSmartTool() {
   const [underbase, setUnderbase] = useState(true);
   const [choke, setChoke] = useState(1);
   const [baseOpacity, setBaseOpacity] = useState(92);
-  const [removeLight, setRemoveLight] = useState(false);
+  const [bgMode, setBgMode] = useState('none'); // 'none' | 'light' | 'dark'
   const [threshold, setThreshold] = useState(248);
+  const [pickedColors, setPickedColors] = useState([]); // [{ hex }]
+  const [pickTolerance, setPickTolerance] = useState(24);
+  const [picking, setPicking] = useState(false);
+  const [protectHighlights, setProtectHighlights] = useState(false);
+  const [highlightThreshold, setHighlightThreshold] = useState(200);
 
   const [fileName, setFileName] = useState('');
   const [ready, setReady] = useState(false);
@@ -149,7 +160,8 @@ export default function HalftoneSmartTool() {
     for (let i = 0; i < w * h; i++) {
       const a = data[i * 4 + 3];
       const lum = 0.2126 * data[i * 4] + 0.7152 * data[i * 4 + 1] + 0.0722 * data[i * 4 + 2];
-      alpha[i] = (removeLight && lum >= threshold) ? 0 : a;
+      const dropped = (bgMode === 'light' && lum >= threshold) || (bgMode === 'dark' && lum <= threshold);
+      alpha[i] = dropped ? 0 : a;
     }
     const mask = dilateAlpha(alpha, w, h, choke);
     const bid = bctx.createImageData(w, h);
@@ -164,13 +176,25 @@ export default function HalftoneSmartTool() {
       for (let gx = -diag; gx <= diag; gx += cell) {
         const x = w / 2 + gx * co - gy * si, y = h / 2 + gx * si + gy * co;
         if (x < -cell || y < -cell || x > w + cell || y > h + cell) continue;
-        const p = sampleRegion(data, w, h, x, y, cell * 0.48, removeLight, threshold);
+        const p = sampleRegion(data, w, h, x, y, cell * 0.48, bgMode, threshold);
         if (!p.a) continue;
+        const protect = protectHighlights && p.lum >= highlightThreshold;
         if (mode === 'color') {
           markDot(actx, x, y, cell, Math.max(0.02, p.a), p, p.a, ang, shape);
         } else if (mode === 'mono' || mode === 'grayscale') {
-          const d = correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a;
+          const d = protect ? 1 : correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a;
           markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape);
+        } else if (mode === 'picked') {
+          for (let idx = 0; idx < pickedColors.length; idx++) {
+            const pc = hexToRgb(pickedColors[idx].hex);
+            const dist = colorDistance(p.r, p.g, p.b, pc.r, pc.g, pc.b);
+            const toleranceDist = Math.max(1, (pickTolerance / 100) * MAX_COLOR_DIST);
+            const closeness = clampVal(1 - dist / toleranceDist);
+            if (closeness <= 0) continue;
+            const d = protect ? 1 : correctedVal(closeness * 255, contrast, gamma, gain, invert) * p.a;
+            const a2 = (idx * 22.5) * Math.PI / 180;
+            markDot(actx, x, y, cell, d, pc, p.a, a2, shape);
+          }
         } else {
           const R = p.r / 255, G = p.g / 255, B = p.b / 255, K = 1 - Math.max(R, G, B), den = 1 - K || 1;
           const vals = { c: clampVal((1 - R - K) / den), m: clampVal((1 - G - K) / den), y: clampVal((1 - B - K) / den), k: clampVal(K) };
@@ -217,7 +241,7 @@ export default function HalftoneSmartTool() {
   };
 
   // Full regeneration: anything that changes the actual dot pattern.
-  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, removeLight, threshold]);
+  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold]);
   // Cheap redraw only: these affect compositing, not the generated dots/base.
   useEffect(() => { if (ready) renderView(); /* eslint-disable-next-line */ }, [view, garmentColor, underbase, baseOpacity]);
 
@@ -251,13 +275,27 @@ export default function HalftoneSmartTool() {
       await recordJob({
         tool: 'halftone-smart', title: `Semitono ${fileName || 'diseño'}`, status: 'done',
         inputPreview: thumbImgRef.current ? makeThumb(thumbImgRef.current) : '', outputPreview: '',
-        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, removeLight, threshold },
+        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold },
         result: { width: srcRef.current.width, height: srcRef.current.height, dpi, lpi, mode, shape },
         resultBlob: blob, resultFilename: 'semitono_pro.png',
       });
       await logUsage('halftone-smart', 'run', { mode, dpi, lpi });
       loadJobs();
     }, 'image/png');
+  };
+
+  const handleCanvasClick = (e) => {
+    if (!picking) return;
+    const canvas = canvasRef.current, src = srcRef.current;
+    if (!canvas || !src?.width) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const x = Math.max(0, Math.min(src.width - 1, Math.floor((e.clientX - rect.left) * scaleX)));
+    const y = Math.max(0, Math.min(src.height - 1, Math.floor((e.clientY - rect.top) * scaleY)));
+    const px = src.getContext('2d').getImageData(x, y, 1, 1).data;
+    const hex = '#' + [px[0], px[1], px[2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+    setPickedColors((p) => (p.length >= 5 ? p : [...p, { hex }]));
+    setPicking(false);
   };
 
   const downloadCanvas = (canvas, filename) => {
@@ -297,6 +335,7 @@ export default function HalftoneSmartTool() {
           <select value={mode} onChange={(e) => setMode(e.target.value)} className={inputCls}>
             <option value="color">Color indexado visual</option>
             <option value="mono">Una tinta</option>
+            <option value="picked">Colores seleccionados</option>
             <option value="cmyk">Separación CMYK</option>
             <option value="grayscale">Escala de grises</option>
           </select>
@@ -338,7 +377,41 @@ export default function HalftoneSmartTool() {
         <label className="flex items-center gap-2 text-sm text-white/70 mt-3">
           <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} className="accent-[#00F0FF]" /> Invertir densidad
         </label>
+        <label className="flex items-center gap-2 text-sm text-white/70 mt-3">
+          <input type="checkbox" checked={protectHighlights} onChange={(e) => setProtectHighlights(e.target.checked)} className="accent-[#00F0FF]" /> Proteger luces
+        </label>
+        {protectHighlights && (
+          <label className="block mt-3">
+            <span className={labelCls}>Umbral de protección: {highlightThreshold}</span>
+            <input type="range" min="180" max="255" value={highlightThreshold} onChange={(e) => setHighlightThreshold(+e.target.value)} className={rangeCls} />
+            <span className="text-[11px] text-white/40 mt-1 block">Las zonas más claras que este valor quedan como tinta sólida en vez de perforarse.</span>
+          </label>
+        )}
       </div>
+
+      {mode === 'picked' && (
+        <div className="pt-4 border-t border-white/10">
+          <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Colores seleccionados</div>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {pickedColors.map((pc, i) => (
+              <div key={i} className="relative">
+                <div className="w-8 h-8 rounded border-2 border-white/20" style={{ background: pc.hex }} />
+                <button type="button" onClick={() => setPickedColors((p) => p.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 text-white/70 text-[10px] leading-none flex items-center justify-center hover:text-[#FF2D95]">×</button>
+              </div>
+            ))}
+            {pickedColors.length < 5 && (
+              <button type="button" onClick={() => setPicking(true)}
+                className={`w-8 h-8 rounded border-2 border-dashed flex items-center justify-center text-sm ${picking ? 'border-[#00F0FF] text-[#00F0FF] animate-pulse' : 'border-white/30 text-white/50'}`}>+</button>
+            )}
+          </div>
+          <div className="text-[11px] text-white/40 mb-3">{picking ? 'Haz clic sobre la imagen (vista "Original" recomendada) para tomar el color.' : `${pickedColors.length} de 5 colores.`}</div>
+          <label className="block">
+            <span className={labelCls}>Tolerancia de color: {pickTolerance}</span>
+            <input type="range" min="1" max="100" value={pickTolerance} onChange={(e) => setPickTolerance(+e.target.value)} className={rangeCls} />
+          </label>
+        </div>
+      )}
 
       <div className="pt-4 border-t border-white/10">
         <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Prenda y base blanca</div>
@@ -367,13 +440,20 @@ export default function HalftoneSmartTool() {
 
       <div className="pt-4 border-t border-white/10">
         <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Fondo</div>
-        <label className="flex items-center gap-2 text-sm text-white/70">
-          <input type="checkbox" checked={removeLight} onChange={(e) => setRemoveLight(e.target.checked)} className="accent-[#00F0FF]" /> Eliminar fondo claro
+        <label className="block">
+          <span className={labelCls}>Eliminar fondo</span>
+          <select value={bgMode} onChange={(e) => { const v = e.target.value; setBgMode(v); setThreshold(v === 'dark' ? 30 : 248); }} className={inputCls}>
+            <option value="none">Ninguno</option>
+            <option value="light">Claro (para prenda clara)</option>
+            <option value="dark">Oscuro (para prenda oscura)</option>
+          </select>
         </label>
-        <label className="block mt-3">
-          <span className={labelCls}>Umbral: {threshold}</span>
-          <input type="range" min="180" max="255" value={threshold} onChange={(e) => setThreshold(+e.target.value)} className={rangeCls} />
-        </label>
+        {bgMode !== 'none' && (
+          <label className="block mt-3">
+            <span className={labelCls}>{bgMode === 'dark' ? 'Tolerancia de negro' : 'Umbral'}: {threshold}</span>
+            <input type="range" min={bgMode === 'dark' ? 0 : 180} max={bgMode === 'dark' ? 80 : 255} value={threshold} onChange={(e) => setThreshold(+e.target.value)} className={rangeCls} />
+          </label>
+        )}
       </div>
 
       <div className="pt-4 border-t border-white/10 space-y-2">
@@ -441,7 +521,8 @@ export default function HalftoneSmartTool() {
             </div>
             <div className="nx-checker rounded-lg overflow-auto flex-1 min-h-[400px] p-2 flex items-center justify-center relative">
               {busy && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10"><Loader2 className="animate-spin text-[#00AEEF]" size={28}/></div>}
-              <canvas ref={canvasRef} className="max-w-full max-h-full" />
+              {picking && <div className="absolute top-2 left-2 z-10 px-3 py-1.5 rounded bg-[#00F0FF] text-black text-xs font-display uppercase tracking-widest">Haz clic en la imagen para tomar el color</div>}
+              <canvas ref={canvasRef} onClick={handleCanvasClick} className="max-w-full max-h-full" style={{ cursor: picking ? 'crosshair' : 'default' }} />
             </div>
           </>
         )}
