@@ -63,6 +63,13 @@ function markDot(ctx, x, y, size, d, col, alpha, ang, shape, minS = 0, maxS = In
   ctx.fill();
   ctx.restore();
 }
+function clearCell(ctx, x, y, size, ang) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.clearRect(-size / 2, -size / 2, size, size);
+  ctx.restore();
+}
 // Separable max-dilation with a square structuring element (equivalent to the
 // naive O(w*h*rad^2) window-max, but O(w*h*rad) — matters at rad up to 12 on 2600px images.
 function dilateAlpha(alpha, w, h, rad) {
@@ -262,6 +269,16 @@ export default function HalftoneSmartTool() {
       return;
     }
 
+    // "Colores seleccionados" is a *selective* halftone: the untouched original
+    // image is the base layer, and only the picked-color regions get punched
+    // out and replaced with a halftone dot — everything else stays full-color.
+    if (mode === 'picked') {
+      const baseId = actx.createImageData(w, h);
+      baseId.data.set(data);
+      for (let i = 0; i < w * h; i++) baseId.data[i * 4 + 3] = alpha[i];
+      actx.putImageData(baseId, 0, 0);
+    }
+
     const diag = Math.hypot(w, h), co = Math.cos(ang), si = Math.sin(ang);
     const ink = hexToRgb(inkColor);
     const minS = cell * (minDotPct / 100), maxS = cell * (maxDotPct / 100);
@@ -278,14 +295,19 @@ export default function HalftoneSmartTool() {
           const d = protect ? 1 : correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a;
           markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape, minS, maxS);
         } else if (mode === 'picked') {
+          const toleranceDist = Math.max(1, (pickTolerance / 100) * MAX_COLOR_DIST);
+          let bestIdx = -1, bestCloseness = 0;
           for (let idx = 0; idx < pickedColors.length; idx++) {
             const pc = hexToRgb(pickedColors[idx].hex);
             const dist = colorDistance(p.r, p.g, p.b, pc.r, pc.g, pc.b);
-            const toleranceDist = Math.max(1, (pickTolerance / 100) * MAX_COLOR_DIST);
             const closeness = clampVal(1 - dist / toleranceDist);
-            if (closeness <= 0) continue;
-            const d = protect ? 1 : correctedVal(closeness * 255, contrast, gamma, gain, invert) * p.a;
-            const a2 = (idx * 22.5) * Math.PI / 180;
+            if (closeness > bestCloseness) { bestCloseness = closeness; bestIdx = idx; }
+          }
+          if (bestIdx >= 0) {
+            const pc = hexToRgb(pickedColors[bestIdx].hex);
+            const d = protect ? 1 : correctedVal(bestCloseness * 255, contrast, gamma, gain, invert) * p.a;
+            const a2 = (bestIdx * 22.5) * Math.PI / 180;
+            clearCell(actx, x, y, cell, ang);
             markDot(actx, x, y, cell, d, pc, p.a, a2, shape, minS, maxS);
           }
         } else {
