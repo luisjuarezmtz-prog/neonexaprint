@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
     // an MFA-gated account fails with a mfaId instead of a token — the caller
     // requests an OTP by email, then completes login with that code + mfaId.
     requestLoginOTP: (email) => pb.collection('users').requestOTP(email),
-    completeMfaLogin: (otpId, code, mfaId) => pb.collection('users').authWithOTP(otpId, code, { body: { mfaId } }),
+    completeMfaLogin: (otpId, code, mfaId) => pb.collection('users').authWithOTP(otpId, code, { mfaId }),
     resendVerification: () => pb.collection('users').requestVerification(user.email),
     signup: async (fields) => {
       const { email, password, name, phone = '', company = '', rfc = '' } = fields;
