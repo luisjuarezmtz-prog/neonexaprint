@@ -8,6 +8,37 @@ import { History, X, Loader2, Download } from 'lucide-react';
 
 const DPI = 150;
 
+// Best-Fit Decreasing Height shelf packing — sorts tallest-first, then backfills
+// existing shelves (rows) before opening a new one, instead of always wrapping to
+// a fresh row in upload order. Meaningfully denser than naive left-to-right wrap.
+// Never rotates artwork: a printed design must stay right-side-up on the garment.
+function packShelfBFDH(entries, sheetPx, gapPx) {
+  const sorted = [...entries].sort((a, b) => b.h - a.h);
+  const shelves = []; // { y, height, usedWidth }
+  const placements = [];
+  for (const { it, w, h } of sorted) {
+    let bestShelf = null, bestLeftover = Infinity;
+    for (const shelf of shelves) {
+      if (h <= shelf.height && shelf.usedWidth + w + gapPx <= sheetPx) {
+        const leftover = sheetPx - (shelf.usedWidth + w + gapPx);
+        if (leftover < bestLeftover) { bestLeftover = leftover; bestShelf = shelf; }
+      }
+    }
+    if (bestShelf) {
+      placements.push({ it, x: bestShelf.usedWidth + gapPx, y: bestShelf.y, w, h });
+      bestShelf.usedWidth += w + gapPx;
+    } else {
+      const y = shelves.length ? shelves[shelves.length - 1].y + shelves[shelves.length - 1].height + gapPx : gapPx;
+      const shelf = { y, height: h, usedWidth: 0 };
+      shelves.push(shelf);
+      placements.push({ it, x: gapPx, y, w, h });
+      shelf.usedWidth += w + gapPx;
+    }
+  }
+  const totalH = shelves.length ? shelves[shelves.length - 1].y + shelves[shelves.length - 1].height + gapPx : gapPx;
+  return { placements, totalH };
+}
+
 export default function GangSheetTool() {
   const { membership } = useMembership();
   const planName = membership?.expand?.plan?.name;
@@ -46,18 +77,13 @@ export default function GangSheetTool() {
       const px = (cm) => Math.round((cm / 2.54) * DPI);
       const sheetPx = px(sheetW);
       const gapPx = px(gap);
-      // shelf packing
-      const placed = [];
-      let x = gapPx, y = gapPx, rowH = 0;
-      for (const it of items) {
+      const dims = items.map((it) => {
         const w = px(it.wCm);
         const ratio = (it.img.naturalHeight || it.img.height) / (it.img.naturalWidth || it.img.width);
         const h = Math.round(w * ratio);
-        if (x + w + gapPx > sheetPx) { x = gapPx; y += rowH + gapPx; rowH = 0; }
-        placed.push({ it, x, y, w, h });
-        x += w + gapPx; rowH = Math.max(rowH, h);
-      }
-      const totalH = y + rowH + gapPx;
+        return { it, w, h };
+      });
+      const { placements: placed, totalH } = packShelfBFDH(dims, sheetPx, gapPx);
       const c = canvasRef.current || document.createElement('canvas');
       c.width = sheetPx; c.height = totalH;
       const ctx = c.getContext('2d');
@@ -117,7 +143,7 @@ export default function GangSheetTool() {
   );
 
   return (
-    <ToolShell eyebrow="NEONEXA TOOLS" title="Gang Sheet automático con IA" subtitle="Acomoda tus diseños para aprovechar el ancho y largo imprimible." sidebar={sidebar}>
+    <ToolShell eyebrow="NEONEXA TOOLS" title="Gang Sheet Pro" subtitle="Acomodo optimizado de diseños para aprovechar al máximo el ancho y largo imprimible." sidebar={sidebar}>
       <div className="space-y-5">
         <Dropzone multiple onFiles={onFiles} hint="Agrega varios PNG transparentes. Ajusta el ancho de cada uno en cm." />
         {err && <div role="alert" className="text-[#FF2D95] text-sm">{err}</div>}

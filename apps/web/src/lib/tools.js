@@ -3,7 +3,7 @@ import pb from '@/lib/pocketbaseClient';
 export const TOOLS = [
   { slug: 'inspector', name: 'Inspector de impresión', desc: 'Analiza resolución, tamaño, transparencias, bordes y riesgos antes de imprimir.', priority: 1 },
   { slug: 'calculadora', name: 'Calculadora inteligente de costos', desc: 'Calcula metros, material, tinta, mano de obra, merma, margen y precio sugerido.', priority: 1 },
-  { slug: 'gang-sheet', name: 'Gang Sheet automático con IA', desc: 'Acomoda diseños para aprovechar el ancho y largo imprimible.', priority: 1 },
+  { slug: 'gang-sheet', name: 'Gang Sheet Pro', desc: 'Acomodo optimizado de diseños para aprovechar al máximo el ancho y largo imprimible.', priority: 1 },
   { slug: 'background-remover', name: 'Eliminador de fondo con IA Pro', desc: 'Quita fondos conservando detalle fino y genera PNG transparente.', priority: 2 },
   { slug: 'upscaler', name: 'Mejorador HD/4K para DTF', desc: 'Aumenta resolución y nitidez para impresión.', priority: 2 },
   { slug: 'vectorizer', name: 'Vectorizador IA (PNG → SVG)', desc: 'Convierte raster a vectores editables.', priority: 2 },
