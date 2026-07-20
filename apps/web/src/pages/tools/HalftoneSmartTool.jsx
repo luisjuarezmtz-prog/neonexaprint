@@ -27,22 +27,47 @@ function correctedVal(v, contrast, gamma, gain, invert) {
   x = clampVal(x + gain / 100);
   return invert ? 1 - x : x;
 }
-function sampleRegion(data, w, h, cx, cy, r, bgMode, threshold) {
+function sampleRegion(data, w, h, cx, cy, r, bgMask) {
   let R = 0, G = 0, B = 0, A = 0, N = 0;
   const st = Math.max(1, Math.floor(r / 2));
   for (let y = Math.max(0, ~~(cy - r)); y < Math.min(h, cy + r); y += st) {
     for (let x = Math.max(0, ~~(cx - r)); x < Math.min(w, cx + r); x += st) {
-      const i = (y * w + x) * 4;
+      const idx = y * w + x, i = idx * 4;
       let a = data[i + 3] / 255;
-      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-      if (bgMode === 'light' && lum >= threshold) a = 0;
-      else if (bgMode === 'dark' && lum <= threshold) a = 0;
+      if (bgMask && bgMask[idx]) a = 0;
       R += data[i] * a; G += data[i + 1] * a; B += data[i + 2] * a; A += a; N++;
     }
   }
   if (!A) return { r: 0, g: 0, b: 0, a: 0, lum: 255 };
   const r0 = R / A, g0 = G / A, b0 = B / A;
   return { r: r0, g: g0, b: b0, a: A / N, lum: 0.2126 * r0 + 0.7152 * g0 + 0.0722 * b0 };
+}
+// Flood-fill background removal: only removes light/dark pixels that are
+// CONNECTED to the image border, so legitimate highlights or dark outlines
+// deep inside the artwork survive even if they share the same luminance
+// range as the real background — a blanket threshold would erase both alike.
+function floodFillBackgroundMask(data, w, h, bgMode, threshold) {
+  const mask = new Uint8Array(w * h);
+  if (bgMode === 'none') return mask;
+  const isBg = (i) => {
+    const lum = 0.2126 * data[i * 4] + 0.7152 * data[i * 4 + 1] + 0.0722 * data[i * 4 + 2];
+    return bgMode === 'light' ? lum >= threshold : lum <= threshold;
+  };
+  const visited = new Uint8Array(w * h);
+  const stack = [];
+  const seed = (idx) => { if (!visited[idx] && isBg(idx)) { visited[idx] = 1; stack.push(idx); } };
+  for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+  while (stack.length) {
+    const i = stack.pop();
+    mask[i] = 1;
+    const x = i % w, y = (i / w) | 0;
+    if (x > 0) seed(i - 1);
+    if (x < w - 1) seed(i + 1);
+    if (y > 0) seed(i - w);
+    if (y < h - 1) seed(i + w);
+  }
+  return mask;
 }
 function colorDistance(r1, g1, b1, r2, g2, b2) {
   const dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
@@ -113,14 +138,14 @@ const BAYER = {
 // threshold matrix instead of drawing a variable-size dot. Runs at native
 // pixel resolution — the "cell" size just controls how large each matrix
 // entry is drawn (coarser = more visible texture, like a real halftone screen).
-function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectOn, highlightThreshold, ink) {
+function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectOn, highlightThreshold, ink, bgMask) {
   const matrix = BAYER[n] || BAYER[8];
   const blockPx = Math.max(1, Math.round(cell / n));
   const id = actx.createImageData(w, h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      const a = data[i + 3] / 255;
+      const idx = y * w + x, i = idx * 4;
+      const a = (bgMask && bgMask[idx]) ? 0 : data[i + 3] / 255;
       if (a <= 0.01) continue;
       const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const coverage = (protectOn && lum >= highlightThreshold) ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
@@ -143,13 +168,13 @@ const DIFFUSION_KERNELS = {
 // Classic error-diffusion dithering (Floyd–Steinberg / Atkinson / JJN): quantizes
 // each pixel to full ink or none, in raster order, propagating the rounding
 // error to not-yet-visited neighbors per the chosen kernel.
-function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectOn, highlightThreshold, ink) {
+function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectOn, highlightThreshold, ink, bgMask) {
   const cov = new Float32Array(w * h), alphaBuf = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const di = i * 4;
     const lum = 0.2126 * data[di] + 0.7152 * data[di + 1] + 0.0722 * data[di + 2];
     cov[i] = (protectOn && lum >= highlightThreshold) ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
-    alphaBuf[i] = data[di + 3] / 255;
+    alphaBuf[i] = (bgMask && bgMask[i]) ? 0 : data[di + 3] / 255;
   }
   const kernel = DIFFUSION_KERNELS[algo] || DIFFUSION_KERNELS.floyd;
   const id = actx.createImageData(w, h);
@@ -262,13 +287,9 @@ export default function HalftoneSmartTool() {
 
     const sctx = s.getContext('2d', { willReadFrequently: true });
     const im = sctx.getImageData(0, 0, w, h), data = im.data;
+    const bgMask = floodFillBackgroundMask(data, w, h, bgMode, threshold);
     const alpha = new Uint8ClampedArray(w * h);
-    for (let i = 0; i < w * h; i++) {
-      const a = data[i * 4 + 3];
-      const lum = 0.2126 * data[i * 4] + 0.7152 * data[i * 4 + 1] + 0.0722 * data[i * 4 + 2];
-      const dropped = (bgMode === 'light' && lum >= threshold) || (bgMode === 'dark' && lum <= threshold);
-      alpha[i] = dropped ? 0 : a;
-    }
+    for (let i = 0; i < w * h; i++) alpha[i] = bgMask[i] ? 0 : data[i * 4 + 3];
     const mask = dilateAlpha(alpha, w, h, choke);
     const bid = bctx.createImageData(w, h);
     for (let i = 0; i < w * h; i++) {
@@ -277,12 +298,12 @@ export default function HalftoneSmartTool() {
     bctx.putImageData(bid, 0, 0);
 
     if (pattern === 'bayer') {
-      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, hexToRgb(inkColor));
+      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, hexToRgb(inkColor), bgMask);
       applyHardEdges();
       return;
     }
     if (pattern === 'diffusion') {
-      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, hexToRgb(inkColor));
+      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, hexToRgb(inkColor), bgMask);
       applyHardEdges();
       return;
     }
@@ -307,7 +328,7 @@ export default function HalftoneSmartTool() {
       for (let gx = -diag; gx <= diag; gx += cell) {
         const x = w / 2 + gx * co - gy * si, y = h / 2 + gx * si + gy * co;
         if (x < -cell || y < -cell || x > w + cell || y > h + cell) continue;
-        const p = sampleRegion(data, w, h, x, y, cell * 0.48, bgMode, threshold);
+        const p = sampleRegion(data, w, h, x, y, cell * 0.48, bgMask);
         if (!p.a) continue;
         const protect = protectHighlights && p.lum >= highlightThreshold;
         if (mode === 'color') {
