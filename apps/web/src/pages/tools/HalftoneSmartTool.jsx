@@ -332,7 +332,12 @@ export default function HalftoneSmartTool() {
         if (!p.a) continue;
         const protect = protectHighlights && p.lum >= highlightThreshold;
         if (mode === 'color') {
-          markDot(actx, x, y, cell, Math.max(0.02, p.a), p, p.a, ang, shape, minS, maxS);
+          // Dot size follows the sampled color's own luminance (dark = big dot,
+          // light = small dot), like a real photographic color separation —
+          // using only alpha here (as before) made every fully-opaque flat-color
+          // design render at near-uniform, near-solid dot size regardless of tone.
+          const d = protect ? 1 : Math.max(0.02, correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a);
+          markDot(actx, x, y, cell, d, p, p.a, ang, shape, minS, maxS);
         } else if (mode === 'mono' || mode === 'grayscale') {
           const d = protect ? 1 : correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a;
           markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape, minS, maxS);
