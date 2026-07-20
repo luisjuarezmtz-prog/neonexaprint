@@ -138,7 +138,7 @@ const BAYER = {
 // threshold matrix instead of drawing a variable-size dot. Runs at native
 // pixel resolution — the "cell" size just controls how large each matrix
 // entry is drawn (coarser = more visible texture, like a real halftone screen).
-function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectOn, highlightThreshold, ink, bgMask) {
+function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectHi, hiThreshold, protectLo, loThreshold, ink, bgMask) {
   const matrix = BAYER[n] || BAYER[8];
   const blockPx = Math.max(1, Math.round(cell / n));
   const id = actx.createImageData(w, h);
@@ -148,7 +148,8 @@ function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, p
       const a = (bgMask && bgMask[idx]) ? 0 : data[i + 3] / 255;
       if (a <= 0.01) continue;
       const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-      const coverage = (protectOn && lum >= highlightThreshold) ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
+      const protect = (protectHi && lum >= hiThreshold) || (protectLo && lum <= loThreshold);
+      const coverage = protect ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
       const mx = Math.floor(x / blockPx) % n, my = Math.floor(y / blockPx) % n;
       const th = (matrix[my][mx] + 0.5) / (n * n);
       if (coverage <= th) continue;
@@ -168,12 +169,13 @@ const DIFFUSION_KERNELS = {
 // Classic error-diffusion dithering (Floyd–Steinberg / Atkinson / JJN): quantizes
 // each pixel to full ink or none, in raster order, propagating the rounding
 // error to not-yet-visited neighbors per the chosen kernel.
-function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectOn, highlightThreshold, ink, bgMask) {
+function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectHi, hiThreshold, protectLo, loThreshold, ink, bgMask) {
   const cov = new Float32Array(w * h), alphaBuf = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const di = i * 4;
     const lum = 0.2126 * data[di] + 0.7152 * data[di + 1] + 0.0722 * data[di + 2];
-    cov[i] = (protectOn && lum >= highlightThreshold) ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
+    const protect = (protectHi && lum >= hiThreshold) || (protectLo && lum <= loThreshold);
+    cov[i] = protect ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
     alphaBuf[i] = (bgMask && bgMask[i]) ? 0 : data[di + 3] / 255;
   }
   const kernel = DIFFUSION_KERNELS[algo] || DIFFUSION_KERNELS.floyd;
@@ -232,6 +234,8 @@ export default function HalftoneSmartTool() {
   const [picking, setPicking] = useState(false);
   const [protectHighlights, setProtectHighlights] = useState(true);
   const [highlightThreshold, setHighlightThreshold] = useState(200);
+  const [protectShadows, setProtectShadows] = useState(false);
+  const [shadowThreshold, setShadowThreshold] = useState(55);
   const [hardEdges, setHardEdges] = useState(false);
   const [hardEdgeThreshold, setHardEdgeThreshold] = useState(128);
   const [pattern, setPattern] = useState('am'); // 'am' | 'bayer' | 'diffusion'
@@ -298,12 +302,12 @@ export default function HalftoneSmartTool() {
     bctx.putImageData(bid, 0, 0);
 
     if (pattern === 'bayer') {
-      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, hexToRgb(inkColor), bgMask);
+      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, hexToRgb(inkColor), bgMask);
       applyHardEdges();
       return;
     }
     if (pattern === 'diffusion') {
-      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, hexToRgb(inkColor), bgMask);
+      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, hexToRgb(inkColor), bgMask);
       applyHardEdges();
       return;
     }
@@ -330,7 +334,7 @@ export default function HalftoneSmartTool() {
         if (x < -cell || y < -cell || x > w + cell || y > h + cell) continue;
         const p = sampleRegion(data, w, h, x, y, cell * 0.48, bgMask);
         if (!p.a) continue;
-        const protect = protectHighlights && p.lum >= highlightThreshold;
+        const protect = (protectHighlights && p.lum >= highlightThreshold) || (protectShadows && p.lum <= shadowThreshold);
         if (mode === 'color') {
           // Dot size follows the sampled color's own luminance (dark = big dot,
           // light = small dot), like a real photographic color separation —
@@ -400,7 +404,7 @@ export default function HalftoneSmartTool() {
   };
 
   // Full regeneration: anything that changes the actual dot pattern.
-  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct, hardEdges, hardEdgeThreshold]);
+  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct, hardEdges, hardEdgeThreshold]);
   // Cheap redraw only: these affect compositing, not the generated dots/base.
   useEffect(() => { if (ready) renderView(); /* eslint-disable-next-line */ }, [view, garmentColor, underbase, baseOpacity]);
 
@@ -435,7 +439,7 @@ export default function HalftoneSmartTool() {
       await recordJob({
         tool: 'halftone-smart', title: `Semitono ${fileName || 'diseño'}`, status: 'done',
         inputPreview: thumbImgRef.current ? makeThumb(thumbImgRef.current) : '', outputPreview: '',
-        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct, hardEdges, hardEdgeThreshold },
+        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, protectShadows, shadowThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct, hardEdges, hardEdgeThreshold },
         result: { width: srcRef.current.width, height: srcRef.current.height, dpi, lpi, mode, shape },
         resultBlob: blob, resultFilename: 'semitono_pro.png',
       });
@@ -444,15 +448,18 @@ export default function HalftoneSmartTool() {
     }, 'image/png');
   };
 
-  // Choosing a garment auto-configures background removal + highlight
-  // protection to match it (dark garment → remove dark bg, light garment →
-  // remove light bg) — matches NOVAGE's "Modo de Prenda" behavior, where one
-  // choice drives the rest instead of toggling several controls by hand.
+  // Choosing a garment auto-configures background removal + which tones get
+  // protected (kept as solid ink) to match it — matches NOVAGE's own copy:
+  // dark garment protects highlights (shadows perforate, revealing the dark
+  // fabric), light garment protects shadows (highlights perforate, revealing
+  // the white fabric) — one choice drives the rest instead of 4 separate toggles.
   const applyGarment = (hex) => {
     setGarmentColor(hex);
     const dark = isDarkColor(hex);
     setBgMode(dark ? 'dark' : 'light');
     setThreshold(dark ? 30 : 248);
+    setProtectHighlights(dark);
+    setProtectShadows(!dark);
   };
 
   const handleCanvasClick = (e) => {
@@ -597,6 +604,16 @@ export default function HalftoneSmartTool() {
             <span className={labelCls}>Umbral de protección: {highlightThreshold}</span>
             <input type="range" min="180" max="255" value={highlightThreshold} onChange={(e) => setHighlightThreshold(+e.target.value)} className={rangeCls} />
             <span className="text-[11px] text-white/40 mt-1 block">Las zonas más claras que este valor quedan como tinta sólida en vez de perforarse.</span>
+          </label>
+        )}
+        <label className="flex items-center gap-2 text-sm text-white/70 mt-3">
+          <input type="checkbox" checked={protectShadows} onChange={(e) => setProtectShadows(e.target.checked)} className="accent-[#00F0FF]" /> Proteger sombras
+        </label>
+        {protectShadows && (
+          <label className="block mt-3">
+            <span className={labelCls}>Umbral de protección: {shadowThreshold}</span>
+            <input type="range" min="0" max="80" value={shadowThreshold} onChange={(e) => setShadowThreshold(+e.target.value)} className={rangeCls} />
+            <span className="text-[11px] text-white/40 mt-1 block">Las zonas más oscuras que este valor quedan como tinta sólida en vez de perforarse (útil para prenda clara).</span>
           </label>
         )}
       </div>
