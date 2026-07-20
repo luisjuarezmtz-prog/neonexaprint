@@ -269,9 +269,12 @@ export default function HalftoneSmartTool() {
       return;
     }
 
-    // "Colores seleccionados" is a *selective* halftone: the untouched original
-    // image is the base layer, and only the picked-color regions get punched
-    // out and replaced with a halftone dot — everything else stays full-color.
+    // "Colores protegidos": the untouched original image is the base layer, and
+    // every cell gets converted to a normal color halftone dot EXCEPT the ones
+    // matching a picked/protected color, which are left showing the original
+    // flat pixels — confirmed against NOVAGE's actual behavior (their "Proteger
+    // colores seleccionados" excludes the picked color FROM the halftone, it
+    // doesn't restrict the halftone TO it).
     if (mode === 'picked') {
       const baseId = actx.createImageData(w, h);
       baseId.data.set(data);
@@ -296,20 +299,16 @@ export default function HalftoneSmartTool() {
           markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape, minS, maxS);
         } else if (mode === 'picked') {
           const toleranceDist = Math.max(1, (pickTolerance / 100) * MAX_COLOR_DIST);
-          let bestIdx = -1, bestCloseness = 0;
+          let isProtected = false;
           for (let idx = 0; idx < pickedColors.length; idx++) {
             const pc = hexToRgb(pickedColors[idx].hex);
-            const dist = colorDistance(p.r, p.g, p.b, pc.r, pc.g, pc.b);
-            const closeness = clampVal(1 - dist / toleranceDist);
-            if (closeness > bestCloseness) { bestCloseness = closeness; bestIdx = idx; }
+            if (colorDistance(p.r, p.g, p.b, pc.r, pc.g, pc.b) <= toleranceDist) { isProtected = true; break; }
           }
-          if (bestIdx >= 0) {
-            const pc = hexToRgb(pickedColors[bestIdx].hex);
-            const d = protect ? 1 : correctedVal(bestCloseness * 255, contrast, gamma, gain, invert) * p.a;
-            const a2 = (bestIdx * 22.5) * Math.PI / 180;
+          if (!isProtected) {
             clearCell(actx, x, y, cell, ang);
-            markDot(actx, x, y, cell, d, pc, p.a, a2, shape, minS, maxS);
+            markDot(actx, x, y, cell, Math.max(0.02, p.a), p, p.a, ang, shape, minS, maxS);
           }
+          // protected: leave the original pixels (already drawn as the base layer) untouched
         } else {
           const R = p.r / 255, G = p.g / 255, B = p.b / 255, K = 1 - Math.max(R, G, B), den = 1 - K || 1;
           const vals = { c: clampVal((1 - R - K) / den), m: clampVal((1 - G - K) / den), y: clampVal((1 - B - K) / den), k: clampVal(K) };
@@ -451,7 +450,7 @@ export default function HalftoneSmartTool() {
           <select value={mode} onChange={(e) => setMode(e.target.value)} className={inputCls}>
             <option value="color">Color indexado visual</option>
             <option value="mono">Una tinta</option>
-            <option value="picked">Colores seleccionados</option>
+            <option value="picked">Colores protegidos</option>
             <option value="cmyk">Separación CMYK</option>
             <option value="grayscale">Escala de grises</option>
           </select>
@@ -547,7 +546,8 @@ export default function HalftoneSmartTool() {
 
       {mode === 'picked' && (
         <div className="pt-4 border-t border-white/10">
-          <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Colores seleccionados</div>
+          <div className="font-display uppercase tracking-widest text-xs text-white/60 mb-3">Colores sin semitono</div>
+          <div className="text-[11px] text-white/40 mb-3">El resto de la imagen se convierte a semitono a color normal; estos colores quedan protegidos (planos, sin puntos).</div>
           <div className="flex flex-wrap gap-2 mb-2">
             {pickedColors.map((pc, i) => (
               <div key={i} className="relative">
@@ -561,7 +561,7 @@ export default function HalftoneSmartTool() {
                 className={`w-8 h-8 rounded border-2 border-dashed flex items-center justify-center text-sm ${picking ? 'border-[#00F0FF] text-[#00F0FF] animate-pulse' : 'border-white/30 text-white/50'}`}>+</button>
             )}
           </div>
-          <div className="text-[11px] text-white/40 mb-3">{picking ? 'Haz clic sobre la imagen (vista "Original" recomendada) para tomar el color.' : `${pickedColors.length} de 5 colores.`}</div>
+          <div className="text-[11px] text-white/40 mb-3">{picking ? 'Haz clic sobre la imagen (vista "Original" recomendada) para tomar el color a proteger.' : `${pickedColors.length} de 5 colores protegidos.`}</div>
           <label className="block">
             <span className={labelCls}>Tolerancia de color: {pickTolerance}</span>
             <input type="range" min="1" max="100" value={pickTolerance} onChange={(e) => setPickTolerance(+e.target.value)} className={rangeCls} />
