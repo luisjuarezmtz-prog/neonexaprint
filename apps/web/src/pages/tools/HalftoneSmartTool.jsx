@@ -45,13 +45,13 @@ function colorDistance(r1, g1, b1, r2, g2, b2) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 const MAX_COLOR_DIST = Math.sqrt(255 * 255 * 3);
-function markDot(ctx, x, y, size, d, col, alpha, ang, shape) {
+function markDot(ctx, x, y, size, d, col, alpha, ang, shape, minS = 0, maxS = Infinity) {
   if (d <= 0.001 || alpha <= 0.001) return;
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(ang);
   ctx.fillStyle = `rgba(${col.r | 0},${col.g | 0},${col.b | 0},${alpha})`;
-  const s = size * Math.sqrt(clampVal(d));
+  const s = Math.max(minS, Math.min(maxS, size * Math.sqrt(clampVal(d))));
   ctx.beginPath();
   switch (shape) {
     case 'square': ctx.rect(-s / 2, -s / 2, s, s); break;
@@ -89,6 +89,80 @@ function dilateAlpha(alpha, w, h, rad) {
   return out;
 }
 
+const BAYER = {
+  4: [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
+  8: [
+    [0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26],
+    [12, 44, 4, 36, 14, 46, 6, 38], [60, 28, 52, 20, 62, 30, 54, 22],
+    [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25],
+    [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21],
+  ],
+};
+// Ordered dithering: compares a corrected coverage value against a periodic
+// threshold matrix instead of drawing a variable-size dot. Runs at native
+// pixel resolution — the "cell" size just controls how large each matrix
+// entry is drawn (coarser = more visible texture, like a real halftone screen).
+function renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, n, protectOn, highlightThreshold, ink) {
+  const matrix = BAYER[n] || BAYER[8];
+  const blockPx = Math.max(1, Math.round(cell / n));
+  const id = actx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const a = data[i + 3] / 255;
+      if (a <= 0.01) continue;
+      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      const coverage = (protectOn && lum >= highlightThreshold) ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
+      const mx = Math.floor(x / blockPx) % n, my = Math.floor(y / blockPx) % n;
+      const th = (matrix[my][mx] + 0.5) / (n * n);
+      if (coverage <= th) continue;
+      id.data[i] = ink.r; id.data[i + 1] = ink.g; id.data[i + 2] = ink.b; id.data[i + 3] = Math.round(255 * a);
+    }
+  }
+  actx.putImageData(id, 0, 0);
+}
+const DIFFUSION_KERNELS = {
+  floyd: [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]],
+  atkinson: [[1, 0, 1 / 8], [2, 0, 1 / 8], [-1, 1, 1 / 8], [0, 1, 1 / 8], [1, 1, 1 / 8], [0, 2, 1 / 8]],
+  jjn: [
+    [1, 0, 7 / 48], [2, 0, 5 / 48], [-2, 1, 3 / 48], [-1, 1, 5 / 48], [0, 1, 7 / 48], [1, 1, 5 / 48], [2, 1, 3 / 48],
+    [-2, 2, 1 / 48], [-1, 2, 3 / 48], [0, 2, 5 / 48], [1, 2, 3 / 48], [2, 2, 1 / 48],
+  ],
+};
+// Classic error-diffusion dithering (Floyd–Steinberg / Atkinson / JJN): quantizes
+// each pixel to full ink or none, in raster order, propagating the rounding
+// error to not-yet-visited neighbors per the chosen kernel.
+function renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, algo, protectOn, highlightThreshold, ink) {
+  const cov = new Float32Array(w * h), alphaBuf = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const di = i * 4;
+    const lum = 0.2126 * data[di] + 0.7152 * data[di + 1] + 0.0722 * data[di + 2];
+    cov[i] = (protectOn && lum >= highlightThreshold) ? 1 : correctedVal(255 - lum, contrast, gamma, gain, invert);
+    alphaBuf[i] = data[di + 3] / 255;
+  }
+  const kernel = DIFFUSION_KERNELS[algo] || DIFFUSION_KERNELS.floyd;
+  const id = actx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (alphaBuf[i] <= 0.01) continue;
+      const old = clampVal(cov[i]);
+      const on = old >= 0.5;
+      const err = old - (on ? 1 : 0);
+      for (const [dx, dy, wgt] of kernel) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+        cov[ny * w + nx] += err * wgt;
+      }
+      if (on) {
+        const oi = i * 4;
+        id.data[oi] = ink.r; id.data[oi + 1] = ink.g; id.data[oi + 2] = ink.b; id.data[oi + 3] = Math.round(255 * alphaBuf[i]);
+      }
+    }
+  }
+  actx.putImageData(id, 0, 0);
+}
+
 const VIEWS = [
   { id: 'preview', label: 'Vista prenda' },
   { id: 'art', label: 'Arte transparente' },
@@ -122,6 +196,15 @@ export default function HalftoneSmartTool() {
   const [picking, setPicking] = useState(false);
   const [protectHighlights, setProtectHighlights] = useState(false);
   const [highlightThreshold, setHighlightThreshold] = useState(200);
+  const [pattern, setPattern] = useState('am'); // 'am' | 'bayer' | 'diffusion'
+  const [bayerSize, setBayerSize] = useState(8);
+  const [diffusionAlgo, setDiffusionAlgo] = useState('floyd');
+  const [minDotPct, setMinDotPct] = useState(0);
+  const [maxDotPct, setMaxDotPct] = useState(100);
+  const [zoom, setZoom] = useState(100);
+  const [compareMode, setCompareMode] = useState(false);
+  const [comparePos, setComparePos] = useState(50);
+  const [originalUrl, setOriginalUrl] = useState('');
 
   const [fileName, setFileName] = useState('');
   const [ready, setReady] = useState(false);
@@ -170,8 +253,18 @@ export default function HalftoneSmartTool() {
     }
     bctx.putImageData(bid, 0, 0);
 
+    if (pattern === 'bayer') {
+      renderBayer(actx, data, w, h, cell, contrast, gamma, gain, invert, bayerSize, protectHighlights, highlightThreshold, hexToRgb(inkColor));
+      return;
+    }
+    if (pattern === 'diffusion') {
+      renderDiffusion(actx, data, w, h, contrast, gamma, gain, invert, diffusionAlgo, protectHighlights, highlightThreshold, hexToRgb(inkColor));
+      return;
+    }
+
     const diag = Math.hypot(w, h), co = Math.cos(ang), si = Math.sin(ang);
     const ink = hexToRgb(inkColor);
+    const minS = cell * (minDotPct / 100), maxS = cell * (maxDotPct / 100);
     for (let gy = -diag; gy <= diag; gy += cell) {
       for (let gx = -diag; gx <= diag; gx += cell) {
         const x = w / 2 + gx * co - gy * si, y = h / 2 + gx * si + gy * co;
@@ -180,10 +273,10 @@ export default function HalftoneSmartTool() {
         if (!p.a) continue;
         const protect = protectHighlights && p.lum >= highlightThreshold;
         if (mode === 'color') {
-          markDot(actx, x, y, cell, Math.max(0.02, p.a), p, p.a, ang, shape);
+          markDot(actx, x, y, cell, Math.max(0.02, p.a), p, p.a, ang, shape, minS, maxS);
         } else if (mode === 'mono' || mode === 'grayscale') {
           const d = protect ? 1 : correctedVal(255 - p.lum, contrast, gamma, gain, invert) * p.a;
-          markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape);
+          markDot(actx, x, y, cell, d, mode === 'grayscale' ? { r: 30, g: 30, b: 30 } : ink, p.a, ang, shape, minS, maxS);
         } else if (mode === 'picked') {
           for (let idx = 0; idx < pickedColors.length; idx++) {
             const pc = hexToRgb(pickedColors[idx].hex);
@@ -193,7 +286,7 @@ export default function HalftoneSmartTool() {
             if (closeness <= 0) continue;
             const d = protect ? 1 : correctedVal(closeness * 255, contrast, gamma, gain, invert) * p.a;
             const a2 = (idx * 22.5) * Math.PI / 180;
-            markDot(actx, x, y, cell, d, pc, p.a, a2, shape);
+            markDot(actx, x, y, cell, d, pc, p.a, a2, shape, minS, maxS);
           }
         } else {
           const R = p.r / 255, G = p.g / 255, B = p.b / 255, K = 1 - Math.max(R, G, B), den = 1 - K || 1;
@@ -202,8 +295,8 @@ export default function HalftoneSmartTool() {
             const d = correctedVal(vals[key] * 255, contrast, gamma, gain, invert) * p.a;
             const cctx = channelRefs[key].current.getContext('2d');
             const a2 = CMYK_ANGLE[key] * Math.PI / 180;
-            markDot(cctx, x, y, cell, d, { r: 0, g: 0, b: 0 }, p.a, a2, shape);
-            markDot(actx, x, y, cell, d, CMYK_COLOR[key], p.a, a2, shape);
+            markDot(cctx, x, y, cell, d, { r: 0, g: 0, b: 0 }, p.a, a2, shape, minS, maxS);
+            markDot(actx, x, y, cell, d, CMYK_COLOR[key], p.a, a2, shape, minS, maxS);
           }
         }
       }
@@ -241,14 +334,14 @@ export default function HalftoneSmartTool() {
   };
 
   // Full regeneration: anything that changes the actual dot pattern.
-  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold]);
+  useEffect(() => { if (ready) regenerate(); /* eslint-disable-next-line */ }, [ready, dpi, lpi, mode, shape, angle, contrast, gamma, gain, inkColor, invert, choke, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct]);
   // Cheap redraw only: these affect compositing, not the generated dots/base.
   useEffect(() => { if (ready) renderView(); /* eslint-disable-next-line */ }, [view, garmentColor, underbase, baseOpacity]);
 
   const onFile = async (file) => {
     setErr('');
     try {
-      const { img } = await loadImageFromFile(file);
+      const { img, url } = await loadImageFromFile(file);
       const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
       const sc = Math.min(1, MAX_DIM / Math.max(w0, h0));
       const s = srcRef.current;
@@ -256,6 +349,7 @@ export default function HalftoneSmartTool() {
       s.getContext('2d').drawImage(img, 0, 0, s.width, s.height);
       thumbImgRef.current = img;
       setFileName(file.name);
+      setOriginalUrl(url);
       setReady(true);
     } catch (e) { setErr(String(e.message || e)); }
   };
@@ -275,7 +369,7 @@ export default function HalftoneSmartTool() {
       await recordJob({
         tool: 'halftone-smart', title: `Semitono ${fileName || 'diseño'}`, status: 'done',
         inputPreview: thumbImgRef.current ? makeThumb(thumbImgRef.current) : '', outputPreview: '',
-        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold },
+        params: { dpi, lpi, technique, mode, shape, angle, contrast, gamma, gain, inkColor, invert, garmentColor, underbase, choke, baseOpacity, bgMode, threshold, pickedColors, pickTolerance, protectHighlights, highlightThreshold, pattern, bayerSize, diffusionAlgo, minDotPct, maxDotPct },
         result: { width: srcRef.current.width, height: srcRef.current.height, dpi, lpi, mode, shape },
         resultBlob: blob, resultFilename: 'semitono_pro.png',
       });
@@ -350,6 +444,46 @@ export default function HalftoneSmartTool() {
             <option value="diamond">Diamante</option>
           </select>
         </label>
+        <label className="block mt-3">
+          <span className={labelCls}>Patrón</span>
+          <select value={pattern} onChange={(e) => setPattern(e.target.value)} className={inputCls}>
+            <option value="am">Puntos variables (AM)</option>
+            <option value="bayer">Tramado ordenado (Bayer)</option>
+            <option value="diffusion">Difusión de error</option>
+          </select>
+        </label>
+        {pattern === 'bayer' && (
+          <label className="block mt-3">
+            <span className={labelCls}>Tamaño de matriz</span>
+            <select value={bayerSize} onChange={(e) => setBayerSize(+e.target.value)} className={inputCls}>
+              <option value={4}>4×4</option>
+              <option value={8}>8×8</option>
+            </select>
+          </label>
+        )}
+        {pattern === 'diffusion' && (
+          <label className="block mt-3">
+            <span className={labelCls}>Algoritmo</span>
+            <select value={diffusionAlgo} onChange={(e) => setDiffusionAlgo(e.target.value)} className={inputCls}>
+              <option value="floyd">Floyd–Steinberg</option>
+              <option value="atkinson">Atkinson</option>
+              <option value="jjn">Jarvis–Judice–Ninke</option>
+            </select>
+          </label>
+        )}
+        {pattern !== 'am' && <div className="text-[11px] text-white/40 mt-2">Este patrón usa una sola tinta (color de tinta) e ignora el modo de color.</div>}
+        {pattern === 'am' && (
+          <>
+            <label className="block mt-3">
+              <span className={labelCls}>Punto mínimo: {minDotPct}%</span>
+              <input type="range" min="0" max="90" value={minDotPct} onChange={(e) => setMinDotPct(+e.target.value)} className={rangeCls} />
+            </label>
+            <label className="block mt-3">
+              <span className={labelCls}>Punto máximo: {maxDotPct}%</span>
+              <input type="range" min="10" max="100" value={maxDotPct} onChange={(e) => setMaxDotPct(+e.target.value)} className={rangeCls} />
+            </label>
+          </>
+        )}
       </div>
 
       <div className="pt-4 border-t border-white/10">
@@ -519,10 +653,30 @@ export default function HalftoneSmartTool() {
                 ))}
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <span className="text-[11px] text-white/40 uppercase tracking-widest">Zoom</span>
+              {[100, 200, 400].map((z) => (
+                <button key={z} onClick={() => setZoom(z)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-display ${zoom === z ? 'bg-white/90 text-black' : 'nx-btn-ghost'}`}>{z}%</button>
+              ))}
+              <button onClick={() => setCompareMode((v) => !v)}
+                className={`ml-2 px-2.5 py-1 rounded text-[11px] font-display uppercase tracking-widest ${compareMode ? 'bg-white/90 text-black' : 'nx-btn-ghost'}`}>Antes/Después</button>
+              {compareMode && (
+                <input type="range" min="0" max="100" value={comparePos} onChange={(e) => setComparePos(+e.target.value)} className={rangeCls + ' w-32'} />
+              )}
+            </div>
             <div className="nx-checker rounded-lg overflow-auto flex-1 min-h-[400px] p-2 flex items-center justify-center relative">
               {busy && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10"><Loader2 className="animate-spin text-[#00AEEF]" size={28}/></div>}
               {picking && <div className="absolute top-2 left-2 z-10 px-3 py-1.5 rounded bg-[#00F0FF] text-black text-xs font-display uppercase tracking-widest">Haz clic en la imagen para tomar el color</div>}
-              <canvas ref={canvasRef} onClick={handleCanvasClick} className="max-w-full max-h-full" style={{ cursor: picking ? 'crosshair' : 'default' }} />
+              <div className="relative" style={zoom !== 100 ? { width: meta ? meta.w * (zoom / 100) : undefined, height: meta ? meta.h * (zoom / 100) : undefined } : undefined}>
+                <canvas ref={canvasRef} onClick={handleCanvasClick} className={zoom === 100 ? 'max-w-full max-h-full block' : 'block w-full h-full'} style={{ cursor: picking ? 'crosshair' : 'default' }} />
+                {compareMode && originalUrl && (
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ clipPath: `inset(0 ${100 - comparePos}% 0 0)` }}>
+                    <img src={originalUrl} alt="original" className="w-full h-full object-contain" />
+                    <div className="absolute top-0 bottom-0 w-px bg-[#00F0FF]" style={{ left: '100%' }} />
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
