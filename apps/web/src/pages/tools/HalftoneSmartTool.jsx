@@ -92,9 +92,13 @@ export default function HalftoneSmartTool() {
       setResult(null);
       setView('original');
       setReady(true);
-      draw(img);
     } catch (e) { setErr(String(e.message || e)); }
   };
+
+  // The visible <canvas> only mounts once ready=true; drawing must wait for
+  // that commit (effects run after mount) instead of firing right after
+  // setReady(true), or the very first draw silently targets a null ref.
+  useEffect(() => { if (ready && imgRef.current) draw(imgRef.current); /* eslint-disable-next-line */ }, [ready]);
 
   const generar = async () => {
     if (!imgRef.current) return;
