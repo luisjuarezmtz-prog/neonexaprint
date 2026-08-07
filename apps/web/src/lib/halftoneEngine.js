@@ -139,7 +139,18 @@ export async function process(image, s) {
         if (!n || aSum < 0.08) continue;
         lum = clamp((lum / aSum - 0.5) * (1 + s.contrast / 50) + 0.5 + s.brightness / 100, 0, 1);
         const dark = (tr * 0.299 + tg * 0.587 + tb * 0.114) < 145;
-        const tonal = dark ? 1 - lum : lum;
+        const lightProtection = clamp((s.highlightProtection || 0) / 100, 0, 1);
+        const shadowProtection = clamp((s.shadowProtection || 0) / 100, 0, 1);
+        let tonal = dark ? 1 - lum : lum;
+        // Highlight protection: floors tonal in the light zone so bright areas
+        // keep some visible dot detail instead of going pure dead-flat.
+        const lightZone = smooth(0.38, 0.96, lum);
+        // Shadow protection: caps how far tonal (and therefore relief) can rise
+        // in the dark zone, so shadows don't "close" into solid punched-out
+        // fabric and lose the design's own texture underneath.
+        const shadowZone = 1 - smooth(0.06, 0.58, lum);
+        tonal = Math.max(tonal, lightProtection * (0.22 + 0.62 * lightZone));
+        tonal *= 1 - shadowProtection * shadowZone * 0.58;
         const relief = 0.12 + 0.78 * Math.pow(clamp(tonal, 0, 1), 1 / 1.55);
         const diameter = minDot + (maxDot - minDot) * Math.sqrt(relief);
         if (diameter >= 0.65) punch(data, w, h, x, y, diameter, s.pattern, rad);

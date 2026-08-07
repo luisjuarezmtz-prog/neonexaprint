@@ -43,6 +43,8 @@ export default function HalftoneSmartTool() {
   const [angle, setAngle] = useState(0);
   const [contrast, setContrast] = useState(15);
   const [brightness, setBrightness] = useState(0);
+  const [highlightProtection, setHighlightProtection] = useState(0);
+  const [shadowProtection, setShadowProtection] = useState(0);
   const [tolerance, setTolerance] = useState(28);
   const [dpi, setDpi] = useState(300);
   const [lpi, setLpi] = useState(45);
@@ -101,7 +103,7 @@ export default function HalftoneSmartTool() {
     if (!chk.allowed) { setErr(chk.reason || 'Alcanzaste el límite mensual de tu plan para esta herramienta.'); return; }
     setErr(''); setBusy(true);
     try {
-      const settings = { garmentColor, pattern, size, gap, angle, contrast, brightness, tolerance, dpi, lpi };
+      const settings = { garmentColor, pattern, size, gap, angle, contrast, brightness, highlightProtection, shadowProtection, tolerance, dpi, lpi };
       const r = await processHalftone(imgRef.current, settings);
       setResult(r);
       setView('result');
@@ -202,6 +204,16 @@ export default function HalftoneSmartTool() {
             <label className="block">
               <span className={labelCls}>Brillo: {brightness}</span>
               <input type="range" min="-50" max="50" value={brightness} onChange={(e) => setBrightness(+e.target.value)} className={rangeCls} />
+            </label>
+            <label className="block">
+              <span className={labelCls}>Protección de luces: {highlightProtection}%</span>
+              <input type="range" min="0" max="100" value={highlightProtection} onChange={(e) => setHighlightProtection(+e.target.value)} className={rangeCls} />
+              <span className="text-[11px] text-white/40 mt-1 block">Recupera puntos y detalle en las áreas claras.</span>
+            </label>
+            <label className="block">
+              <span className={labelCls}>Protección de sombras: {shadowProtection}%</span>
+              <input type="range" min="0" max="100" value={shadowProtection} onChange={(e) => setShadowProtection(+e.target.value)} className={rangeCls} />
+              <span className="text-[11px] text-white/40 mt-1 block">Evita que las áreas oscuras se cierren y pierdan textura.</span>
             </label>
             <label className="block">
               <span className={labelCls}>Tolerancia del color: {tolerance}</span>
