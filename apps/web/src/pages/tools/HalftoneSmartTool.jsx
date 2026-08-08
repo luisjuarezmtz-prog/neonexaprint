@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ToolShell, { labelCls, inputCls, rangeCls } from '@/components/ToolShell';
 import Dropzone from '@/components/tools/Dropzone';
 import { loadImageFromFile, recordJob, logUsage, logError, checkLimit, downloadDataURL, makeThumb, getJobResultUrl } from '@/lib/tools';
-import { process as processHalftone } from '@/lib/halftoneEngine';
+import { process as processHalftone, analyzeImage } from '@/lib/halftoneEngine';
 import { useMembership } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { History, Download, Loader2, RefreshCw, Check } from 'lucide-react';
@@ -39,13 +39,13 @@ export default function HalftoneSmartTool() {
   const [garmentColor, setGarmentColor] = useState('#ffffff');
   const [pattern, setPattern] = useState('circle');
   const [size, setSize] = useState(4);
-  const [gap, setGap] = useState(9);
+  const [gap, setGap] = useState(10);
   const [angle, setAngle] = useState(0);
   const [contrast, setContrast] = useState(15);
   const [brightness, setBrightness] = useState(0);
   const [highlightProtection, setHighlightProtection] = useState(0);
   const [shadowProtection, setShadowProtection] = useState(0);
-  const [tolerance, setTolerance] = useState(28);
+  const [tolerance, setTolerance] = useState(30);
   const [dpi, setDpi] = useState(300);
   const [lpi, setLpi] = useState(45);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -62,6 +62,9 @@ export default function HalftoneSmartTool() {
 
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
+  const autoRef = useRef(null); // recipe fields analyzeImage() derives with no exposed UI
+
+  const [autoApplied, setAutoApplied] = useState(false);
 
   const loadJobs = () => pb.collection('tool_jobs').getList(1, 6, { filter: pb.filter('tool = {:t}', { t: 'halftone-smart' }), sort: '-created' }).then((r) => setJobs(r.items)).catch(() => {});
   useEffect(() => { loadJobs(); checkLimit('halftone-smart', planName).then(setLimit); /* eslint-disable-next-line */ }, [planName]);
@@ -92,6 +95,20 @@ export default function HalftoneSmartTool() {
       setResult(null);
       setView('original');
       setReady(true);
+      // Auto-analyze the image (dominant edge/background color, detail level,
+      // how much of the artwork is dark) and apply a tuned recipe — garment
+      // color, gap, LPI and tolerance are visible sliders and get overwritten
+      // with the auto values; the rest (minSize/gamma/densities/background
+      // removal) have no exposed control and only ever come from here.
+      try {
+        const auto = await analyzeImage(img);
+        autoRef.current = auto;
+        setGarmentColor(auto.garmentColor);
+        setGap(auto.gap);
+        setLpi(auto.lpi);
+        setTolerance(auto.tolerance);
+        setAutoApplied(true);
+      } catch { autoRef.current = null; setAutoApplied(false); }
     } catch (e) { setErr(String(e.message || e)); }
   };
 
@@ -107,7 +124,13 @@ export default function HalftoneSmartTool() {
     if (!chk.allowed) { setErr(chk.reason || 'Alcanzaste el límite mensual de tu plan para esta herramienta.'); return; }
     setErr(''); setBusy(true);
     try {
-      const settings = { garmentColor, pattern, size, gap, angle, contrast, brightness, highlightProtection, shadowProtection, tolerance, dpi, lpi };
+      const auto = autoRef.current || {};
+      const settings = {
+        garmentColor, pattern, size, gap, angle, contrast, brightness, highlightProtection, shadowProtection, tolerance, dpi, lpi,
+        minSize: auto.minSize, gamma: auto.gamma, minDensity: auto.minDensity, maxDensity: auto.maxDensity,
+        protectionThreshold: auto.protectionThreshold, backgroundColor: auto.backgroundColor,
+        backgroundTolerance: auto.backgroundTolerance, removeBackground: auto.removeBackground,
+      };
       const r = await processHalftone(imgRef.current, settings);
       setResult(r);
       setView('result');
@@ -142,8 +165,8 @@ export default function HalftoneSmartTool() {
   };
 
   const cambiarImagen = () => {
-    imgRef.current = null;
-    setReady(false); setFileName(''); setMeta(null); setResult(null); setErr(''); setView('result');
+    imgRef.current = null; autoRef.current = null;
+    setReady(false); setFileName(''); setMeta(null); setResult(null); setErr(''); setView('result'); setAutoApplied(false);
   };
 
   const info = garmentInfo(garmentColor);
@@ -195,7 +218,7 @@ export default function HalftoneSmartTool() {
             </label>
             <label className="block">
               <span className={labelCls}>Separación: {gap}</span>
-              <input type="range" min="0" max="20" value={gap} onChange={(e) => setGap(+e.target.value)} className={rangeCls} />
+              <input type="range" min="1" max="14" value={gap} onChange={(e) => setGap(+e.target.value)} className={rangeCls} />
             </label>
             <label className="block">
               <span className={labelCls}>Ángulo de trama: {angle}°</span>
@@ -221,7 +244,7 @@ export default function HalftoneSmartTool() {
             </label>
             <label className="block">
               <span className={labelCls}>Tolerancia del color: {tolerance}</span>
-              <input type="range" min="4" max="80" value={tolerance} onChange={(e) => setTolerance(+e.target.value)} className={rangeCls} />
+              <input type="range" min="5" max="80" value={tolerance} onChange={(e) => setTolerance(+e.target.value)} className={rangeCls} />
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
@@ -295,7 +318,7 @@ export default function HalftoneSmartTool() {
                 <button onClick={() => selectView(false)}
                   className={`px-3 py-1.5 rounded text-xs font-display uppercase tracking-widest ${view === 'original' ? 'bg-white/90 text-black' : 'nx-btn-ghost'}`}>Original</button>
               </div>
-              <div className="text-xs text-white/50 truncate">{meta?.name}{meta ? ` · ${meta.w} × ${meta.h}px` : ''}</div>
+              <div className="text-xs text-white/50 truncate">{meta?.name}{meta ? ` · ${meta.w} × ${meta.h}px` : ''}{autoApplied ? ' · receta automática' : ''}</div>
             </div>
             <div className="nx-checker rounded-lg overflow-auto flex-1 min-h-[400px] p-2 flex items-center justify-center relative">
               {busy && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10"><Loader2 className="animate-spin text-[#00AEEF]" size={28}/></div>}
