@@ -6,7 +6,7 @@ export const TOOLS = [
   { slug: 'gang-sheet', name: 'Gang Sheet Pro', desc: 'Acomodo optimizado de diseños para aprovechar al máximo el ancho y largo imprimible.', priority: 1 },
   { slug: 'background-remover', name: 'Eliminador de fondo con IA Pro', desc: 'Quita fondos conservando detalle fino y genera PNG transparente.', priority: 2 },
   { slug: 'upscaler', name: 'Mejorador HD/4K para DTF', desc: 'Aumenta resolución y nitidez para impresión.', priority: 2 },
-  { slug: 'vectorizer', name: 'Vectorizador IA (PNG → SVG)', desc: 'Convierte raster a vectores editables.', priority: 2 },
+  { slug: 'vectorizer', name: 'Neonexa Vectorizar', desc: 'Convierte PNG/JPG en SVG vectorial real, con colores editables por capa y escalado sin pérdida.', priority: 2 },
   { slug: 'transparency-cleaner', name: 'Eliminador de transparencias y bordes blancos', desc: 'Corrige píxeles semitransparentes, halos y bordes no deseados.', priority: 2 },
   { slug: 'halftone-smart', name: 'Neonexa Halftone', desc: 'Elige el color de playera, quita solo ese color, protege el resto y genera el semitono listo para DTF.', priority: 2 },
   { slug: 'shirt-simulator', name: 'Neonexa Mockups', desc: 'Coloca el diseño sobre playeras, sudaderas y tazas reales, cambia el color de la prenda y descarga el mockup.', priority: 2 },
