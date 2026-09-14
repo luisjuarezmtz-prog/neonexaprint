@@ -23,8 +23,8 @@ const SERVICES = [
 const TOOLS = [
   {
     to: '/tools/shirt-simulator',
-    title: 'Simulador sobre playeras',
-    sub: 'Coloca tu diseño sobre una playera real, ajusta escala y posición, exporta tu mockup en segundos.',
+    title: 'Neonexa Mockups',
+    sub: 'Coloca tu diseño sobre playeras, sudaderas y tazas reales, cambia el color de la prenda y exporta tu mockup en segundos.',
     icon: Shirt,
     color: '#00AEEF',
   },

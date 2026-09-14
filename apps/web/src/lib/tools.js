@@ -9,7 +9,7 @@ export const TOOLS = [
   { slug: 'vectorizer', name: 'Vectorizador IA (PNG → SVG)', desc: 'Convierte raster a vectores editables.', priority: 2 },
   { slug: 'transparency-cleaner', name: 'Eliminador de transparencias y bordes blancos', desc: 'Corrige píxeles semitransparentes, halos y bordes no deseados.', priority: 2 },
   { slug: 'halftone-smart', name: 'Neonexa Halftone', desc: 'Elige el color de playera, quita solo ese color, protege el resto y genera el semitono listo para DTF.', priority: 2 },
-  { slug: 'shirt-simulator', name: 'Simulador sobre playeras', desc: 'Previsualiza el diseño sobre prendas y colores distintos.', priority: 2 },
+  { slug: 'shirt-simulator', name: 'Neonexa Mockups', desc: 'Coloca el diseño sobre playeras, sudaderas y tazas reales, cambia el color de la prenda y descarga el mockup.', priority: 2 },
   { slug: 'rip-preparer', name: 'Preparador automático para RIP', desc: 'Prepara archivos para Acrorip, Maintop, CADlink, Flexi y otros.', priority: 2 },
 ];
 
