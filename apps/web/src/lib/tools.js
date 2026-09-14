@@ -4,7 +4,7 @@ export const TOOLS = [
   { slug: 'inspector', name: 'Inspector de impresión', desc: 'Analiza resolución, tamaño, transparencias, bordes y riesgos antes de imprimir.', priority: 1 },
   { slug: 'calculadora', name: 'Calculadora inteligente de costos', desc: 'Calcula metros, material, tinta, mano de obra, merma, margen y precio sugerido.', priority: 1 },
   { slug: 'gang-sheet', name: 'Gang Sheet Pro', desc: 'Acomodo optimizado de diseños para aprovechar al máximo el ancho y largo imprimible.', priority: 1 },
-  { slug: 'background-remover', name: 'Eliminador de fondo con IA Pro', desc: 'Quita fondos conservando detalle fino y genera PNG transparente.', priority: 2 },
+  { slug: 'background-remover', name: 'Neonexa Quitar Fondo', desc: 'Quita solo el fondo que toca las orillas, protege negros y huecos internos y genera PNG transparente.', priority: 2 },
   { slug: 'upscaler', name: 'Mejorador HD/4K para DTF', desc: 'Aumenta resolución y nitidez para impresión.', priority: 2 },
   { slug: 'vectorizer', name: 'Neonexa Vectorizar', desc: 'Convierte PNG/JPG en SVG vectorial real, con colores editables por capa y escalado sin pérdida.', priority: 2 },
   { slug: 'transparency-cleaner', name: 'Eliminador de transparencias y bordes blancos', desc: 'Corrige píxeles semitransparentes, halos y bordes no deseados.', priority: 2 },
