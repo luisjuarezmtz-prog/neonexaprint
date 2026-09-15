@@ -1,7 +1,7 @@
 import pb from '@/lib/pocketbaseClient';
 
 export const TOOLS = [
-  { slug: 'inspector', name: 'Inspector de impresión', desc: 'Analiza resolución, tamaño, transparencias, bordes y riesgos antes de imprimir.', priority: 1 },
+  { slug: 'inspector', name: 'Neonexa Inspector', desc: 'Revisa resolución, transparencias, halos y bordes antes de imprimir, con reporte TXT descargable.', priority: 1 },
   { slug: 'calculadora', name: 'Calculadora inteligente de costos', desc: 'Calcula metros, material, tinta, mano de obra, merma, margen y precio sugerido.', priority: 1 },
   { slug: 'gang-sheet', name: 'Gang Sheet Pro', desc: 'Acomodo optimizado de diseños para aprovechar al máximo el ancho y largo imprimible.', priority: 1 },
   { slug: 'background-remover', name: 'Neonexa Quitar Fondo', desc: 'Quita solo el fondo que toca las orillas, protege negros y huecos internos y genera PNG transparente.', priority: 2 },
