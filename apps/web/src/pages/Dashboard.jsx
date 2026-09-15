@@ -413,7 +413,7 @@ function Favoritos({ favorites }) {
 }
 
 function ToolJobs({ jobs }) {
-  if (jobs.length === 0) return <div className="nx-card p-16 text-center text-white/60">Aún no has usado Neonexa Tools. <Link to="/tools" className="text-[#00F0FF] underline">Explora las 10 herramientas</Link>.</div>;
+  if (jobs.length === 0) return <div className="nx-card p-16 text-center text-white/60">Aún no has usado Neonexa Tools. <Link to="/tools" className="text-[#00F0FF] underline">Explora las 11 herramientas</Link>.</div>;
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {jobs.map(j => {

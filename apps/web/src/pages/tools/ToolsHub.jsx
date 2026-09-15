@@ -6,14 +6,14 @@ import { useMembership } from '@/lib/membership';
 import { TOOLS } from '@/lib/tools';
 import {
   ScanSearch, Calculator, LayoutGrid, Eraser, Sparkles, PenTool,
-  Wand2, CircleDot, Shirt, FileCog, Lock, Crown, ArrowRight,
+  Wand2, CircleDot, Shirt, FileCog, Ruler, Lock, Crown, ArrowRight,
 } from 'lucide-react';
 
 const ICONS = {
   inspector: ScanSearch, calculadora: Calculator, 'gang-sheet': LayoutGrid,
   'background-remover': Eraser, upscaler: Sparkles, vectorizer: PenTool,
   'transparency-cleaner': Wand2, 'halftone-smart': CircleDot,
-  'shirt-simulator': Shirt, 'rip-preparer': FileCog,
+  'shirt-simulator': Shirt, 'rip-preparer': FileCog, 'size-guide': Ruler,
 };
 
 export default function ToolsHub() {
@@ -21,12 +21,12 @@ export default function ToolsHub() {
   return (
     <PageShell>
       <Helmet>
-        <title>Neonexa Tools — 10 herramientas DTF pro en el navegador</title>
+        <title>Neonexa Tools — 11 herramientas DTF pro en el navegador</title>
         <meta name="description" content="Inspecciona, cotiza, acomoda, limpia, vectoriza y prepara tus diseños para impresión DTF directo desde el navegador, sin instalar nada." />
       </Helmet>
       <div className="max-w-[90rem] mx-auto px-6 pt-14 pb-24">
         <div className="font-display tracking-[0.4em] text-[#00F0FF] text-xs">NEONEXA TOOLS</div>
-        <h1 className="font-display text-5xl md:text-6xl font-black mt-3 uppercase">10 herramientas <span className="text-[#00AEEF]">DTF pro</span></h1>
+        <h1 className="font-display text-5xl md:text-6xl font-black mt-3 uppercase">11 herramientas <span className="text-[#00AEEF]">DTF pro</span></h1>
         <p className="text-white/60 mt-4 max-w-2xl">Inspecciona, cotiza, acomoda, limpia, vectoriza y prepara tus diseños para impresión. El acceso depende de tu plan de membresía activo.</p>
 
         {!loading && !allowed && (

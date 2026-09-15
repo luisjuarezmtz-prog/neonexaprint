@@ -26,6 +26,7 @@ import TransparencyCleanerTool from './pages/tools/TransparencyCleanerTool';
 import HalftoneSmartTool from './pages/tools/HalftoneSmartTool';
 import ShirtSimulatorTool from './pages/tools/ShirtSimulatorTool';
 import RipPreparerTool from './pages/tools/RipPreparerTool';
+import SizeGuideTool from './pages/tools/SizeGuideTool';
 import DtfTextil from './pages/dtf/DtfTextil';
 import DtfUv from './pages/dtf/DtfUv';
 import Cart from './pages/Cart';
@@ -85,6 +86,7 @@ function App() {
             <Route path="/tools/halftone-smart" element={<HalftoneSmartTool />} />
             <Route path="/tools/shirt-simulator" element={<ShirtSimulatorTool />} />
             <Route path="/tools/rip-preparer" element={<RipPreparerTool />} />
+            <Route path="/tools/size-guide" element={<SizeGuideTool />} />
             <Route path="/tools/mockup" element={<Navigate to="/tools/shirt-simulator" replace />} />
             <Route path="/tools/print" element={<Navigate to="/tools/rip-preparer" replace />} />
             <Route path="/tools/halftone" element={<Navigate to="/tools/halftone-smart" replace />} />

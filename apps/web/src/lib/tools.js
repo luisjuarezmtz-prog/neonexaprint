@@ -11,6 +11,7 @@ export const TOOLS = [
   { slug: 'halftone-smart', name: 'Neonexa Halftone', desc: 'Elige el color de playera, quita solo ese color, protege el resto y genera el semitono listo para DTF.', priority: 2 },
   { slug: 'shirt-simulator', name: 'Neonexa Mockups', desc: 'Coloca el diseño sobre playeras, sudaderas y tazas reales, cambia el color de la prenda y descarga el mockup.', priority: 2 },
   { slug: 'rip-preparer', name: 'Preparador automático para RIP', desc: 'Prepara archivos para Acrorip, Maintop, CADlink, Flexi y otros.', priority: 2 },
+  { slug: 'size-guide', name: 'Neonexa Guía de Medidas', desc: 'Compara tallas a escala real y confirma cómo se verá el diseño impreso en pecho y espalda.', priority: 1 },
 ];
 
 export const toolBySlug = (slug) => TOOLS.find((t) => t.slug === slug);
