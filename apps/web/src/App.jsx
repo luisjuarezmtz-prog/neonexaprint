@@ -13,7 +13,7 @@ import MembresiasRetorno from './pages/MembresiasRetorno';
 import Privacidad from './pages/Privacidad';
 import Terminos from './pages/Terminos';
 import Dashboard from './pages/Dashboard';
-import { LoginPage, RegisterPage } from './pages/AuthPages';
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from './pages/AuthPages';
 import VerifyEmail from './pages/VerifyEmail';
 import ToolsHub from './pages/tools/ToolsHub';
 import InspectorTool from './pages/tools/InspectorTool';
@@ -64,6 +64,8 @@ function App() {
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/recuperar" element={<ForgotPasswordPage />} />
+            <Route path="/restablecer" element={<ResetPasswordPage />} />
             <Route path="/verificar" element={<VerifyEmail />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<Admin />} />

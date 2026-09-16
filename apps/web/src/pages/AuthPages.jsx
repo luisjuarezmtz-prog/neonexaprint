@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import PageShell from '@/components/PageShell';
 import { useAuth } from '@/lib/auth';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail, Check, AlertTriangle } from 'lucide-react';
 
 function Shell({ title, subtitle, children }) {
   return (
@@ -86,9 +86,136 @@ export function LoginPage() {
           {loading && <Loader2 className="animate-spin" size={16}/>} {mfa ? 'Verificar código' : 'Entrar'}
         </button>
       </form>
-      <div className="mt-6 text-sm text-white/60">
-        ¿No tienes cuenta? <Link to="/register" className="text-[#00F0FF]">Crear una</Link>
+      <div className="mt-6 text-sm text-white/60 space-y-2">
+        {!mfa && <div><Link to="/recuperar" className="text-[#00F0FF]">¿Olvidaste tu contraseña?</Link></div>}
+        <div>¿No tienes cuenta? <Link to="/register" className="text-[#00F0FF]">Crear una</Link></div>
       </div>
+    </Shell>
+  );
+}
+
+export function ForgotPasswordPage() {
+  const { requestPasswordReset } = useAuth();
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(''); setLoading(true);
+    try {
+      await requestPasswordReset(email);
+      setSent(true);
+    } catch {
+      // No se distingue entre correo existente e inexistente: decirlo
+      // permitiría averiguar quién tiene cuenta en el sitio.
+      setSent(true);
+    } finally { setLoading(false); }
+  };
+
+  if (sent) {
+    return (
+      <Shell title="Revisa tu correo" subtitle="NEONEXA · RECUPERAR">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-[#3ddc84]/20 flex items-center justify-center mx-auto"><Mail size={30} className="text-[#3ddc84]"/></div>
+          <p className="text-white/65 mt-6">
+            Si <b className="text-white/85">{email}</b> tiene una cuenta, le enviamos un enlace para elegir una contraseña nueva.
+          </p>
+          <p className="text-white/40 text-sm mt-3">Revisa también la carpeta de spam. El enlace vence pronto por seguridad.</p>
+          <Link to="/login" className="nx-btn-ghost px-6 py-3 mt-8 inline-block">Volver al inicio de sesión</Link>
+        </div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell title="Recuperar acceso" subtitle="NEONEXA · RECUPERAR">
+      <p className="text-white/60 text-sm -mt-4 mb-6">Escribe tu correo y te mandamos un enlace para crear una contraseña nueva.</p>
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label htmlFor="recover-email" className="text-xs uppercase tracking-widest text-white/60">Email</label>
+          <input id="recover-email" className={inputClass + ' mt-2'} type="email" required value={email}
+            onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" autoFocus/>
+        </div>
+        {err && <div role="alert" className="text-[#FF2D95] text-sm">{err}</div>}
+        <button disabled={loading} className="nx-btn-primary w-full py-3 mt-2 flex items-center justify-center gap-2">
+          {loading && <Loader2 className="animate-spin" size={16}/>} Enviar enlace
+        </button>
+      </form>
+      <div className="mt-6 text-sm text-white/60">
+        <Link to="/login" className="text-[#00F0FF]">Volver al inicio de sesión</Link>
+      </div>
+    </Shell>
+  );
+}
+
+export function ResetPasswordPage() {
+  const { confirmPasswordReset } = useAuth();
+  const [params] = useSearchParams();
+  const nav = useNavigate();
+  const token = params.get('token');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  if (!token) {
+    return (
+      <Shell title="Enlace inválido" subtitle="NEONEXA · RESTABLECER">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-[#FF2D95]/20 flex items-center justify-center mx-auto"><AlertTriangle size={30} className="text-[#FF2D95]"/></div>
+          <p className="text-white/65 mt-6">Este enlace está incompleto. Pide uno nuevo desde la pantalla de recuperación.</p>
+          <Link to="/recuperar" className="nx-btn-primary px-6 py-3 mt-8 inline-block">Pedir enlace nuevo</Link>
+        </div>
+      </Shell>
+    );
+  }
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (password !== confirm) { setErr('Las contraseñas no coinciden.'); return; }
+    setErr(''); setLoading(true);
+    try {
+      await confirmPasswordReset(token, password);
+      setDone(true);
+    } catch {
+      setErr('El enlace ya venció o no es válido. Pide uno nuevo.');
+    } finally { setLoading(false); }
+  };
+
+  if (done) {
+    return (
+      <Shell title="Contraseña cambiada" subtitle="NEONEXA · RESTABLECER">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-[#3ddc84]/20 flex items-center justify-center mx-auto"><Check size={30} className="text-[#3ddc84]"/></div>
+          <p className="text-white/65 mt-6">Ya puedes entrar con tu contraseña nueva.</p>
+          <button onClick={() => nav('/login')} className="nx-btn-primary px-6 py-3 mt-8 inline-block">Iniciar sesión</button>
+        </div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell title="Nueva contraseña" subtitle="NEONEXA · RESTABLECER">
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label htmlFor="new-pass" className="text-xs uppercase tracking-widest text-white/60">Contraseña nueva</label>
+          <input id="new-pass" className={inputClass + ' mt-2'} type="password" required minLength={8}
+            value={password} onChange={(e) => setPassword(e.target.value)} autoFocus/>
+          <p className="text-white/40 text-xs mt-2">Mínimo 8 caracteres.</p>
+        </div>
+        <div>
+          <label htmlFor="new-pass-2" className="text-xs uppercase tracking-widest text-white/60">Repite la contraseña</label>
+          <input id="new-pass-2" className={inputClass + ' mt-2'} type="password" required minLength={8}
+            value={confirm} onChange={(e) => setConfirm(e.target.value)}/>
+        </div>
+        {err && <div role="alert" className="text-[#FF2D95] text-sm">{err}</div>}
+        <button disabled={loading} className="nx-btn-primary w-full py-3 mt-2 flex items-center justify-center gap-2">
+          {loading && <Loader2 className="animate-spin" size={16}/>} Guardar contraseña
+        </button>
+      </form>
     </Shell>
   );
 }

@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useMembership, isMembershipActive } from '@/lib/membership';
 import pb from '@/lib/pocketbaseClient';
 import { money } from '@/lib/neonexa';
-import { Package, FileImage, FileText, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star, Heart } from 'lucide-react';
+import { Package, FileImage, FileText, User2, Plus, MessageCircle, Shield, Loader2, ChevronRight, Bell, Crown, Wrench, Images, Download, MapPin, Trash2, Star, Heart, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { toolBySlug } from '@/lib/tools';
 
@@ -147,6 +147,7 @@ export default function Dashboard() {
             {tab === 'datos' && (
               <div className="space-y-6">
                 <Datos user={user} updateProfile={updateProfile}/>
+                <CambiarPassword/>
                 <Addresses/>
               </div>
             )}
@@ -525,6 +526,67 @@ export function Addresses({ selectable, selectedId, onSelect }) {
         {items.length === 0 && <div className="text-white/40 text-sm py-4 text-center">Sin direcciones guardadas.</div>}
       </div>
     </div>
+  );
+}
+
+function CambiarPassword() {
+  const { changePassword } = useAuth();
+  const [oldPassword, setOldPassword] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const inp = "w-full bg-black/50 border border-[#00AEEF]/30 px-3 py-2 rounded text-white text-sm focus:outline-none focus:border-[#00F0FF]";
+
+  const save = async (e) => {
+    e.preventDefault();
+    setMsg(''); setErr('');
+    if (password !== confirm) { setErr('Las contraseñas nuevas no coinciden.'); return; }
+    if (password === oldPassword) { setErr('La contraseña nueva debe ser distinta de la actual.'); return; }
+    setBusy(true);
+    try {
+      await changePassword(oldPassword, password);
+      setOldPassword(''); setPassword(''); setConfirm('');
+      setMsg('Contraseña actualizada.');
+    } catch (ex) {
+      // PocketBase responde 400 tanto si la actual es incorrecta como si la
+      // nueva no cumple; el mensaje propio del re-login sí se muestra tal cual.
+      setErr(ex?.message?.includes('Vuelve a iniciar') ? ex.message : 'No se pudo cambiar. Revisa que tu contraseña actual sea correcta y que la nueva tenga al menos 8 caracteres.');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <form onSubmit={save} className="nx-card p-6 max-w-2xl">
+      <div className="flex items-center gap-2 mb-1">
+        <KeyRound size={16} className="text-[#00F0FF]"/>
+        <span className="font-display uppercase tracking-widest text-sm">Cambiar contraseña</span>
+      </div>
+      <p className="text-white/45 text-xs mb-5">Te pedimos la actual para confirmar que eres tú.</p>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <label className="block sm:col-span-2">
+          <span className="text-xs uppercase tracking-widest text-white/60">Contraseña actual</span>
+          <input type="password" autoComplete="current-password" className={inp + ' mt-2'} required
+            value={oldPassword} onChange={(e) => setOldPassword(e.target.value)}/>
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-widest text-white/60">Contraseña nueva</span>
+          <input type="password" autoComplete="new-password" minLength={8} className={inp + ' mt-2'} required
+            value={password} onChange={(e) => setPassword(e.target.value)}/>
+          <span className="text-white/40 text-[11px] mt-1 block">Mínimo 8 caracteres.</span>
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-widest text-white/60">Repite la nueva</span>
+          <input type="password" autoComplete="new-password" minLength={8} className={inp + ' mt-2'} required
+            value={confirm} onChange={(e) => setConfirm(e.target.value)}/>
+        </label>
+        <div className="sm:col-span-2 flex items-center gap-4 flex-wrap">
+          <button disabled={busy} className="nx-btn-primary px-6 py-3">{busy ? 'Guardando…' : 'Cambiar contraseña'}</button>
+          {msg && <span className="text-sm text-[#3ddc84]">{msg}</span>}
+          {err && <span role="alert" className="text-sm text-[#FF2D95]">{err}</span>}
+        </div>
+      </div>
+    </form>
   );
 }
 

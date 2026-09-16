@@ -19,6 +19,26 @@ export function AuthProvider({ children }) {
     requestLoginOTP: (email) => pb.collection('users').requestOTP(email),
     completeMfaLogin: (otpId, code, mfaId) => pb.collection('users').authWithOTP(otpId, code, { mfaId }),
     resendVerification: () => pb.collection('users').requestVerification(user.email),
+    // Recuperación de cuenta. El correo lo arma PocketBase con la plantilla de
+    // pb_migrations/1796000000_password_reset_email.js, que apunta a /restablecer.
+    requestPasswordReset: (email) => pb.collection('users').requestPasswordReset(email),
+    confirmPasswordReset: (token, password) =>
+      pb.collection('users').confirmPasswordReset(token, password, password),
+    // Cambiar la contraseña desde dentro exige la actual, así una sesión
+    // abierta y olvidada no basta para secuestrar la cuenta. PocketBase
+    // invalida el token al cambiarla, por eso hay que volver a autenticar.
+    changePassword: async (oldPassword, password) => {
+      const email = pb.authStore.record?.email;
+      await pb.collection('users').update(pb.authStore.record.id, {
+        oldPassword, password, passwordConfirm: password,
+      });
+      try {
+        await pb.collection('users').authWithPassword(email, password);
+      } catch {
+        pb.authStore.clear(); // no se pudo renovar: que vuelva a entrar
+        throw new Error('Contraseña actualizada. Vuelve a iniciar sesión.');
+      }
+    },
     signup: async (fields) => {
       const { email, password, name, phone = '', company = '', rfc = '' } = fields;
       await pb.collection('users').create({
