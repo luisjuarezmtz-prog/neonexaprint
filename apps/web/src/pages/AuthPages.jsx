@@ -22,6 +22,52 @@ function Shell({ title, subtitle, children }) {
 
 const inputClass = "w-full bg-black/50 border border-[#00AEEF]/30 px-4 py-3 rounded text-white placeholder:text-white/30 focus:outline-none focus:border-[#00F0FF] focus:ring-2 focus:ring-[#00F0FF]/30 transition";
 
+/**
+ * Traduce un fallo de PocketBase a algo que la persona pueda accionar.
+ *
+ * Antes todo caía en "Credenciales incorrectas": servidor caído, sin red,
+ * demasiados intentos y contraseña equivocada daban el mismo mensaje. Eso
+ * afirma algo que el código no sabe, y manda a la gente a repetir una y otra
+ * vez una contraseña que podía estar bien.
+ *
+ * PocketBase usa status 0 cuando ni siquiera hubo respuesta (red caída, CORS,
+ * servidor apagado), que es precisamente el caso que peor se confundía con
+ * una contraseña mal escrita.
+ */
+export function authErrorMessage(ex, kind = 'login') {
+  if (ex?.isAbort) return 'La solicitud se canceló. Vuelve a intentar.';
+
+  const status = ex?.status ?? 0;
+  const fields = ex?.response?.data || {};
+
+  if (status === 0) return 'No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.';
+  if (status === 429) return 'Demasiados intentos seguidos. Espera un minuto antes de volver a intentar.';
+  if (status >= 500) return 'El servidor no está respondiendo. Intenta de nuevo en unos minutos.';
+  if (status === 403) return 'Esta cuenta no tiene permitido iniciar sesión. Escríbenos para revisarla.';
+
+  if (kind === 'login' && (status === 400 || status === 401)) {
+    return 'Correo o contraseña incorrectos. Si no la recuerdas, usa “¿Olvidaste tu contraseña?” aquí abajo.';
+  }
+
+  if (kind === 'register') {
+    const [field, info] = Object.entries(fields)[0] || [];
+    if (field === 'email') {
+      return /not.?unique|already/i.test(info?.code || info?.message || '')
+        ? 'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.'
+        : 'Revisa el correo: no parece una dirección válida.';
+    }
+    if (field === 'password') return 'La contraseña no cumple: necesita al menos 8 caracteres.';
+    if (field) return `Revisa el campo “${field}”.`;
+    return 'No se pudo crear la cuenta. Revisa los datos e intenta de nuevo.';
+  }
+
+  if (kind === 'reset' && (status === 400 || status === 404)) {
+    return 'El enlace ya venció o no es válido. Pide uno nuevo desde la pantalla de recuperación.';
+  }
+
+  return 'No se pudo completar la operación. Intenta de nuevo.';
+}
+
 export function LoginPage() {
   const { login, requestLoginOTP, completeMfaLogin, isAuthed } = useAuth();
   const nav = useNavigate();
@@ -47,14 +93,21 @@ export function LoginPage() {
     } catch (ex) {
       const mfaId = ex?.response?.mfaId;
       if (mfaId && !mfa) {
+        // La contraseña era correcta: la cuenta pide segundo factor.
         try {
           const { otpId } = await requestLoginOTP(email);
           setMfa({ mfaId, otpId });
-        } catch { setErr('No se pudo enviar el código de verificación.'); }
+        } catch (otpEx) {
+          setErr(otpEx?.status >= 500 || otpEx?.status === 0
+            ? 'Tu contraseña es correcta, pero no pudimos enviarte el código. Intenta en unos minutos.'
+            : 'No se pudo enviar el código de verificación a tu correo.');
+        }
       } else if (mfa) {
-        setErr('Código incorrecto.');
+        setErr(ex?.status === 400
+          ? 'Código incorrecto o vencido. Pide uno nuevo volviendo a entrar.'
+          : authErrorMessage(ex, 'otp'));
       } else {
-        setErr('Credenciales incorrectas.');
+        setErr(authErrorMessage(ex, 'login'));
       }
     } finally { setLoading(false); }
   };
@@ -107,10 +160,16 @@ export function ForgotPasswordPage() {
     try {
       await requestPasswordReset(email);
       setSent(true);
-    } catch {
+    } catch (ex) {
       // No se distingue entre correo existente e inexistente: decirlo
       // permitiría averiguar quién tiene cuenta en el sitio.
-      setSent(true);
+      //
+      // Pero un fallo de red o del servidor sí hay que decirlo: tragárselo
+      // mostraría "revisa tu correo" a alguien que se quedaría esperando un
+      // mensaje que nunca llegó a pedirse.
+      const status = ex?.status ?? 0;
+      if (status === 0 || status === 429 || status >= 500) setErr(authErrorMessage(ex, 'recover'));
+      else setSent(true);
     } finally { setLoading(false); }
   };
 
@@ -180,8 +239,8 @@ export function ResetPasswordPage() {
     try {
       await confirmPasswordReset(token, password);
       setDone(true);
-    } catch {
-      setErr('El enlace ya venció o no es válido. Pide uno nuevo.');
+    } catch (ex) {
+      setErr(authErrorMessage(ex, 'reset'));
     } finally { setLoading(false); }
   };
 
@@ -238,8 +297,10 @@ export function RegisterPage() {
     if (!terms) { setErr('Debes aceptar los términos y condiciones.'); return; }
     if (!strong) { setErr('La contraseña debe tener 8+ caracteres, letras y números.'); return; }
     setLoading(true);
+    // Antes se mostraba ex.message tal cual: texto técnico de PocketBase, en
+    // inglés, delante de alguien que solo quiere registrarse.
     try { await signup(f); nav('/dashboard'); }
-    catch (ex) { setErr(ex?.response?.data?.email?.message || ex?.message || 'No se pudo crear la cuenta.'); }
+    catch (ex) { setErr(authErrorMessage(ex, 'register')); }
     finally { setLoading(false); }
   };
   return (
