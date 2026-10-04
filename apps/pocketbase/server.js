@@ -13,7 +13,43 @@ const PB_BINARY = path.join(__dirname, 'pocketbase');
 const PB_DATA_DIR = path.join(os.homedir(), 'neonexa_pb_data');
 fs.mkdirSync(PB_DATA_DIR, { recursive: true });
 
-const PB_HOST = '127.0.0.1';
+/**
+ * Direccion donde pocketbase escucha y a la que este proxy se conecta.
+ *
+ * Era 127.0.0.1 y funciono de julio a octubre de 2026. El 3 de octubre el
+ * host dejo de permitir conexiones TCP de loopback entre procesos de la
+ * misma cuenta: el socket aparece en LISTEN en /proc/net/tcp y aun asi
+ * conectarse devuelve ECONNREFUSED. Comprobado con dos procesos propios y
+ * un puerto cualquiera -no es cosa de pocketbase ni del 8090-.
+ *
+ * La IP real de la maquina si acepta esas conexiones, y los puertos altos
+ * estan filtrados desde internet (verificado: desde fuera da timeout), asi
+ * que pocketbase no queda expuesto.
+ *
+ * Volver a 127.0.0.1 en cuanto el host restablezca el loopback: es lo
+ * correcto y no depende de que la IP de la maquina siga siendo la misma.
+ * PB_HOST permite forzarlo sin tocar codigo.
+ */
+function detectLocalAddress() {
+  if (process.env.PB_HOST) return process.env.PB_HOST;
+
+  // En este host compartido TODAS las IPv4 salen marcadas como internal -van
+  // sobre alias de loopback-, asi que filtrar por `!internal` devuelve null.
+  // La IP de esta cuenta es la unica no-127 que vive en la interfaz `lo` a
+  // secas. Hay que mirar EXACTAMENTE esa: el alias `lo:acc` lleva cientos de
+  // IPs de otras cuentas del servidor y atarse a una de esas seria atarse a
+  // la direccion de otro cliente.
+  for (const iface of os.networkInterfaces().lo || []) {
+    if (iface.family === 'IPv4' && iface.address && !iface.address.startsWith('127.')) {
+      return iface.address;
+    }
+  }
+
+  console.error('no se detecto la IP de la cuenta; usando loopback, que este host rechaza');
+  return '127.0.0.1';
+}
+
+const PB_HOST = detectLocalAddress();
 const PB_PORT = 8090;
 const PUBLIC_PORT = process.env.PORT || 3000;
 
